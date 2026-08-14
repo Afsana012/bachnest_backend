@@ -29,6 +29,7 @@ celerybeat.pid
 logs/
 
 # Testing & Coverage
+tests/
 .pytest_cache/
 .coverage
 htmlcov/
