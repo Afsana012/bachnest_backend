@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "bachnest-default-insecure-secret-key-change-in-production"
 
     # Database
+    POSTGRES_SERVER: str = "129.212.239.195"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = ""
+    POSTGRES_DB: str = "bachnest"
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/bachnest"
     DB_POOL_SIZE: int = 20
     DB_MAX_OVERFLOW: int = 10
