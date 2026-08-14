@@ -1,0 +1,31 @@
+# Git & IDE
+.git
+.gitignore
+.vscode
+.idea
+
+# Documentation & Specifications (excluded from production image)
+docs
+README.md
+
+# Python bytecode & environments
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+venv
+.venv
+env
+
+# Tests & Coverage
+tests
+.pytest_cache
+.coverage
+htmlcov
+
+# Local files & Uploads
+.env
+.env.local
+uploads
+*.sqlite3
+*.db
