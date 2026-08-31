@@ -9,9 +9,9 @@ from sqlalchemy.orm import selectinload
 from app.core.constants import UserRole
 from app.core.exceptions import PermissionDeniedError, ResourceNotFoundError
 from app.models.property import Property
-from app.models.room import Room
+from app.models.room import PropertyMedia, Room
 from app.models.user import User
-from app.schemas.property import PropertyCreate, PropertyUpdate
+from app.schemas.property import PropertyCreate, PropertyMediaCreate, PropertyUpdate
 
 
 class PropertyService:
@@ -26,8 +26,7 @@ class PropertyService:
         )
         self.db.add(property_obj)
         await self.db.flush()
-        await self.db.refresh(property_obj)
-        return property_obj
+        return await self.get_property_by_id(property_obj.id)
 
     async def get_property_by_id(self, property_id: uuid.UUID) -> Property:
         """Retrieve detailed information about a property."""
@@ -44,6 +43,29 @@ class PropertyService:
         if not prop:
             raise ResourceNotFoundError(message="Property not found")
         return prop
+
+    async def add_media(self, property_id: uuid.UUID, user: User, items: List[PropertyMediaCreate]) -> Property:
+        """Attach uploaded media to a property with ownership validation."""
+        prop = await self.get_property_by_id(property_id)
+        if prop.owner_id != user.id and user.role != UserRole.SUPER_ADMIN:
+            raise PermissionDeniedError(message="You do not own this property")
+
+        cover_exists = any(m.is_cover for m in prop.media)
+        incoming_has_cover = any(item.is_cover for item in items)
+        for index, item in enumerate(items):
+            is_cover = item.is_cover
+            if not cover_exists and not incoming_has_cover and index == 0:
+                is_cover = True
+            self.db.add(PropertyMedia(
+                property_id=property_id,
+                media_url=item.media_url,
+                media_type=item.media_type,
+                caption=item.caption,
+                is_cover=is_cover,
+                display_order=item.display_order,
+            ))
+        await self.db.flush()
+        return await self.get_property_by_id(property_id)
 
     async def update_property(self, property_id: uuid.UUID, user: User, req: PropertyUpdate) -> Property:
         """Update property details with ownership validation."""

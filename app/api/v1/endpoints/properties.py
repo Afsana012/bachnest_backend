@@ -13,6 +13,7 @@ from app.schemas.common import PaginatedResponse, PaginationMeta, StandardRespon
 from app.schemas.kyc import CompatibilityResult, RoommatePreferenceCreate, RoommatePreferenceOut
 from app.schemas.property import (
     PropertyCreate,
+    PropertyMediaCreate,
     PropertyOut,
     PropertyUpdate,
     RoomCreate,
@@ -140,6 +141,23 @@ async def list_my_properties(
         success=True,
         message="Owner properties retrieved",
         data=[PropertyOut.model_validate(p) for p in properties],
+    )
+
+
+@properties_router.post("/{property_id}/media", response_model=StandardResponse[PropertyOut], status_code=status.HTTP_201_CREATED)
+async def attach_property_media(
+    property_id: uuid.UUID,
+    items: List[PropertyMediaCreate],
+    current_user: User = Depends(require_roles(UserRole.OWNER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Attach uploaded media URLs to a property."""
+    property_service = PropertyService(db)
+    prop = await property_service.add_media(property_id, current_user, items)
+    return StandardResponse(
+        success=True,
+        message="Media attached successfully",
+        data=PropertyOut.model_validate(prop),
     )
 
 

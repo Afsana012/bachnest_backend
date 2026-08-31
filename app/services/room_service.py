@@ -38,8 +38,7 @@ class RoomService:
         )
         self.db.add(room)
         await self.db.flush()
-        await self.db.refresh(room)
-        return room
+        return await self.get_room_by_id(room.id)
 
     async def list_rooms(self, property_id: uuid.UUID) -> List[Room]:
         """List all rooms for a property."""

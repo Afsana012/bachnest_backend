@@ -94,6 +94,14 @@ class PropertyCreate(BaseSchema):
     visitor_policy: Optional[str] = None
 
 
+class PropertyMediaCreate(BaseSchema):
+    media_url: str = Field(..., min_length=5, max_length=512)
+    media_type: str = "IMAGE"
+    caption: Optional[str] = None
+    is_cover: bool = False
+    display_order: int = 0
+
+
 class PropertyUpdate(BaseSchema):
     title: Optional[str] = None
     description: Optional[str] = None
