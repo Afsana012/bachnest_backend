@@ -175,7 +175,7 @@ class BookingService:
                 lease_start_date=booking.requested_move_in_date,
                 notice_period_days=30,
                 status=TenancyStatus.ACTIVE,
-                agreement_status=AgreementStatus.ACTIVE,
+                agreement_status=AgreementStatus.PENDING_SIGNATURE,
             )
             self.db.add(tenancy)
 

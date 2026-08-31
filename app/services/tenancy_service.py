@@ -64,7 +64,7 @@ class TenancyService:
             raise InvalidBookingError(message="Tenancy is already terminated")
 
         tenancy.status = TenancyStatus.TERMINATED
-        tenancy.agreement_status = AgreementStatus.TERMINATED
+        tenancy.agreement_status = AgreementStatus.EXPIRED
 
         # Release seat if occupied
         if tenancy.seat_id:
