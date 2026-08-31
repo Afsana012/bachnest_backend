@@ -40,8 +40,8 @@ class AuthService:
             role=req.role,
             gender=req.gender,
             is_active=True,
-            is_phone_verified=False,
-            is_email_verified=False,
+            is_phone_verified=True,
+            is_email_verified=True,
             is_kyc_verified=False,
         )
         self.db.add(user)
