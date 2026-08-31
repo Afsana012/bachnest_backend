@@ -34,6 +34,22 @@ search_router = APIRouter(prefix="/search", tags=["Search"])
 
 
 # --- PROPERTY ENDPOINTS ---
+@properties_router.get("", response_model=StandardResponse[List[PropertyOut]])
+async def list_properties(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """List published properties for public browsing."""
+    property_service = PropertyService(db)
+    properties = await property_service.list_public_properties(page=page, size=size)
+    return StandardResponse(
+        success=True,
+        message="Properties retrieved successfully",
+        data=[PropertyOut.model_validate(p) for p in properties],
+    )
+
+
 @properties_router.post("", response_model=StandardResponse[PropertyOut], status_code=status.HTTP_201_CREATED)
 async def create_property(
     req: PropertyCreate,

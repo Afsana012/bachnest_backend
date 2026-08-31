@@ -92,3 +92,20 @@ class PropertyService:
         await self.db.flush()
         await self.db.refresh(prop)
         return prop
+
+    async def list_public_properties(self, page: int = 1, size: int = 20) -> List[Property]:
+        """List published properties for public browsing."""
+        query = (
+            select(Property)
+            .options(
+                selectinload(Property.rooms).selectinload(Room.seats),
+                selectinload(Property.media),
+            )
+            .where(Property.is_published == True)
+            .order_by(Property.created_at.desc())
+            .offset((page - 1) * size)
+            .limit(size)
+        )
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
