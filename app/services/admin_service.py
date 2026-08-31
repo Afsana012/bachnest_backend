@@ -12,6 +12,7 @@ from app.models.booking import Tenancy
 from app.models.complaint import Complaint
 from app.models.emergency import AuditLog, EmergencyAlert
 from app.models.property import Property
+from app.models.room import Room
 from app.models.user import User
 
 
@@ -66,7 +67,10 @@ class AdminService:
         """List properties awaiting admin verification."""
         query = (
             select(Property)
-            .options(selectinload(Property.rooms), selectinload(Property.media))
+            .options(
+                selectinload(Property.rooms).selectinload(Room.seats),
+                selectinload(Property.media),
+            )
             .where(Property.is_verified_by_admin == False)
             .order_by(Property.created_at.desc())
         )
@@ -75,7 +79,14 @@ class AdminService:
 
     async def verify_property(self, property_id: uuid.UUID, is_verified: bool) -> Property:
         """Admin verifies or rejects a property listing."""
-        query = select(Property).where(Property.id == property_id)
+        query = (
+            select(Property)
+            .options(
+                selectinload(Property.rooms).selectinload(Room.seats),
+                selectinload(Property.media),
+            )
+            .where(Property.id == property_id)
+        )
         result = await self.db.execute(query)
         prop = result.scalar_one_or_none()
         if not prop:
