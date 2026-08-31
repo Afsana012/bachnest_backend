@@ -13,6 +13,7 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import logger, setup_logging
+from app.core.net import masked_target
 
 
 @asynccontextmanager
@@ -20,6 +21,8 @@ async def lifespan(app: FastAPI):
     """Application lifespan events (startup & shutdown)."""
     setup_logging()
     logger.info(f"Starting {settings.APP_NAME} in [{settings.APP_ENV}] mode...")
+    logger.info(f"Database target: {masked_target(settings.DATABASE_URL)}")
+    logger.info(f"Redis target: {masked_target(settings.REDIS_URL)}")
     yield
     logger.info(f"Shutting down {settings.APP_NAME}...")
 

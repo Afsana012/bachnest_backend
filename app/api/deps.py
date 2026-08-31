@@ -22,7 +22,12 @@ async def get_redis() -> AsyncGenerator[Optional[aioredis.Redis], None]:
     """Provide an async Redis client dependency."""
     client = None
     try:
-        client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        client = aioredis.from_url(
+            settings.REDIS_URL,
+            decode_responses=True,
+            socket_connect_timeout=5,
+            socket_timeout=5,
+        )
         yield client
     except Exception:
         yield None
