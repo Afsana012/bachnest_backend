@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     STORAGE_BUCKET: str = "bachnest"
     STORAGE_ACCESS_KEY: str = ""
     STORAGE_SECRET_KEY: str = ""
-    STORAGE_ENDPOINT_URL: str = ""
+    STORAGE_ENDPOINT_URL: str = "https://6587b1dedb47f7c3f16d32a1e5bb52e6.r2.cloudflarestorage.com"
     STORAGE_PUBLIC_DOMAIN: str = "https://pub-7b2b503530b54d9083f1672a82640ade.r2.dev"
 
 
