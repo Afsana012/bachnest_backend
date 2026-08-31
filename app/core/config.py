@@ -62,12 +62,15 @@ class Settings(BaseSettings):
             return [i.strip() for i in v.split(",") if i.strip()]
         return v
 
-    # Storage Provider (local | s3 | cloudinary)
-    STORAGE_PROVIDER: str = "local"
+    # Storage Provider (local | s3 | r2 | cloudinary)
+    STORAGE_PROVIDER: str = "r2"
     STORAGE_LOCAL_DIR: str = "uploads"
-    STORAGE_BUCKET: str = ""
+    STORAGE_BUCKET: str = "bachnest"
     STORAGE_ACCESS_KEY: str = ""
     STORAGE_SECRET_KEY: str = ""
+    STORAGE_ENDPOINT_URL: str = ""
+    STORAGE_PUBLIC_DOMAIN: str = "https://pub-7b2b503530b54d9083f1672a82640ade.r2.dev"
+
 
     # Payment Provider (mock | sslcommerz | bkash)
     PAYMENT_PROVIDER: str = "mock"

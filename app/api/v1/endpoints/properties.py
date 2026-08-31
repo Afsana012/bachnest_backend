@@ -3,7 +3,7 @@
 from decimal import Decimal
 from typing import List, Optional
 import uuid
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, require_roles
@@ -125,6 +125,31 @@ async def list_my_properties(
         message="Owner properties retrieved",
         data=[PropertyOut.model_validate(p) for p in properties],
     )
+
+
+@properties_router.post("/upload-media", response_model=StandardResponse[dict], status_code=status.HTTP_201_CREATED)
+async def upload_property_media(
+    file: UploadFile = File(...),
+    folder: str = Query("properties", description="Upload folder e.g. properties, kyc, avatar"),
+    current_user: User = Depends(get_current_user),
+):
+    """Upload media image to Cloudflare R2 object storage."""
+    from app.integrations.storage.base import get_storage_provider
+
+    content = await file.read()
+    storage = get_storage_provider()
+    file_url = await storage.upload(
+        file_content=content,
+        filename=file.filename or "upload.jpg",
+        content_type=file.content_type or "image/jpeg",
+        folder=folder,
+    )
+    return StandardResponse(
+        success=True,
+        message="Media uploaded successfully to Cloudflare R2",
+        data={"file_url": file_url, "filename": file.filename},
+    )
+
 
 
 # --- ROOM ENDPOINTS ---
