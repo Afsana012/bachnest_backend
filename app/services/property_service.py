@@ -65,6 +65,7 @@ class PropertyService:
                 display_order=item.display_order,
             ))
         await self.db.flush()
+        self.db.expire(prop, ["media"])
         return await self.get_property_by_id(property_id)
 
     async def update_property(self, property_id: uuid.UUID, user: User, req: PropertyUpdate) -> Property:

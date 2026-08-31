@@ -66,6 +66,8 @@ class KYCService:
         kyc_entry = result.scalar_one_or_none()
         if not kyc_entry:
             raise ResourceNotFoundError(message="KYC record not found")
+        if kyc_entry.status == KYCStatus.APPROVED:
+            raise ConflictError(message="KYC is already approved and cannot be resubmitted")
 
         kyc_entry.status = KYCStatus.PENDING
         kyc_entry.document_type = req.document_type
