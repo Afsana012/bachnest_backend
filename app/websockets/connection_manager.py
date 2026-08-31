@@ -37,3 +37,5 @@ class ConnectionManager:
 
 
 ws_manager = ConnectionManager()
+manager = ws_manager
+

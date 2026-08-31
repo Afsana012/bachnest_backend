@@ -199,3 +199,53 @@ class EmergencyAlertOut(BaseSchema):
     is_active: bool
     resolved_at: Optional[datetime] = None
     created_at: datetime
+
+
+# --- NOTICES ---
+class NoticeCreateRequest(BaseSchema):
+    title: str = Field(..., min_length=3, max_length=200)
+    content: str = Field(..., min_length=5)
+    priority: NoticePriority = NoticePriority.NORMAL
+
+
+class NoticeUpdateRequest(BaseSchema):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    priority: Optional[NoticePriority] = None
+    is_active: Optional[bool] = None
+
+
+class NoticeOut(BaseSchema):
+    id: uuid.UUID
+    property_id: uuid.UUID
+    owner_id: uuid.UUID
+    title: str
+    content: str
+    priority: NoticePriority
+    is_active: bool
+    is_read: bool = False
+    created_at: datetime
+
+
+# --- REVIEWS ---
+class ReviewCreateRequest(BaseSchema):
+    tenancy_id: uuid.UUID
+    rating: int = Field(..., ge=1, le=5)
+    comment: Optional[str] = Field(None, max_length=1000)
+
+
+class ReviewOut(BaseSchema):
+    id: uuid.UUID
+    tenancy_id: uuid.UUID
+    reviewer_id: uuid.UUID
+    reviewee_id: uuid.UUID
+    rating: int
+    comment: Optional[str] = None
+    is_public: bool
+    created_at: datetime
+
+
+class SOSResolveRequest(BaseSchema):
+    resolution_notes: Optional[str] = Field(None, max_length=500)
+
+

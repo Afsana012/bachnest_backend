@@ -1,11 +1,19 @@
-"""Authentication router handling user registration, login, token refresh, and logout."""
+"""Authentication router handling user registration, login, token refresh, verification, and logout."""
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
-from app.schemas.auth import LoginRequest, RefreshTokenRequest, RegisterRequest, TokenResponse, UserOut
+from app.schemas.auth import (
+    LoginRequest,
+    RefreshTokenRequest,
+    RegisterRequest,
+    TokenResponse,
+    UserOut,
+    VerifyEmailRequest,
+    VerifyPhoneRequest,
+)
 from app.schemas.common import StandardResponse
 from app.services.auth_service import AuthService
 
@@ -20,7 +28,7 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     return StandardResponse(
         success=True,
         message="User registered successfully. Welcome to BachNest!",
-        data=UserOut.model_validate(user)
+        data=UserOut.model_validate(user),
     )
 
 
@@ -32,28 +40,51 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     return StandardResponse(
         success=True,
         message="Authentication successful",
-        data=tokens
+        data=tokens,
     )
 
 
 @router.post("/refresh", response_model=StandardResponse[TokenResponse])
-async def refresh_token(req: RefreshTokenRequest):
-    """Obtain a new access token using a valid refresh token."""
-    from app.core.security import create_access_token, decode_token
-    payload = decode_token(req.refresh_token)
-    if payload.get("type") != "refresh":
-        return StandardResponse(success=False, message="Invalid token type", data=None)
-    
-    new_access_token = create_access_token(subject=payload.get("sub"))
+async def refresh_token(req: RefreshTokenRequest, db: AsyncSession = Depends(get_db)):
+    """Obtain a new access token using a valid refresh token with role claims preserved."""
+    auth_service = AuthService(db)
+    tokens = await auth_service.refresh_tokens(req)
     return StandardResponse(
         success=True,
         message="Token refreshed successfully",
-        data=TokenResponse(
-            access_token=new_access_token,
-            refresh_token=req.refresh_token,
-            token_type="bearer",
-            expires_in=900,
-        )
+        data=tokens,
+    )
+
+
+@router.post("/verify-phone", response_model=StandardResponse[dict])
+async def verify_phone(
+    req: VerifyPhoneRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Verify user phone number with OTP."""
+    auth_service = AuthService(db)
+    verified = await auth_service.verify_phone(current_user, req.otp)
+    return StandardResponse(
+        success=verified,
+        message="Phone number verified successfully" if verified else "Invalid OTP provided",
+        data={"is_phone_verified": current_user.is_phone_verified},
+    )
+
+
+@router.post("/verify-email", response_model=StandardResponse[dict])
+async def verify_email(
+    req: VerifyEmailRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Verify user email with verification code/token."""
+    auth_service = AuthService(db)
+    verified = await auth_service.verify_email(current_user, req.token_or_code)
+    return StandardResponse(
+        success=verified,
+        message="Email verified successfully" if verified else "Invalid verification code",
+        data={"is_email_verified": current_user.is_email_verified},
     )
 
 
@@ -63,5 +94,5 @@ async def logout(current_user: User = Depends(get_current_user)):
     return StandardResponse(
         success=True,
         message="User logged out successfully",
-        data={"user_id": str(current_user.id)}
+        data={"user_id": str(current_user.id)},
     )

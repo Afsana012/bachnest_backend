@@ -1,19 +1,16 @@
-"""Property, Room, and Search API endpoints."""
+"""Property, Room, Seat, and Geospatial Search API endpoints."""
 
-import uuid
+from decimal import Decimal
 from typing import List, Optional
+import uuid
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user, get_db, require_roles
 from app.core.constants import PropertyType, RoomType, UserRole
-from app.core.exceptions import PermissionDeniedError, ResourceNotFoundError
-from app.models.property import Property
-from app.models.room import Room, RoomSeat
 from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta, StandardResponse
+from app.schemas.kyc import CompatibilityResult, RoommatePreferenceCreate, RoommatePreferenceOut
 from app.schemas.property import (
     PropertyCreate,
     PropertyOut,
@@ -25,8 +22,13 @@ from app.schemas.property import (
     RoomUpdate,
     SearchPropertyItem,
 )
+from app.services.property_service import PropertyService
+from app.services.room_service import RoomService
+from app.services.roommate_service import RoommateService
+from app.services.search_service import SearchService
 
 properties_router = APIRouter(prefix="/properties", tags=["Properties"])
+owner_properties_router = APIRouter(prefix="/owner/properties", tags=["Owner Properties"])
 rooms_router = APIRouter(tags=["Rooms & Seats"])
 search_router = APIRouter(prefix="/search", tags=["Search"])
 
@@ -36,39 +38,27 @@ search_router = APIRouter(prefix="/search", tags=["Search"])
 async def create_property(
     req: PropertyCreate,
     current_user: User = Depends(require_roles(UserRole.OWNER)),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Create a new property listing (Owner only)."""
-    property_obj = Property(
-        owner_id=current_user.id,
-        **req.model_dump()
-    )
-    db.add(property_obj)
-    await db.flush()
-    await db.refresh(property_obj)
+    property_service = PropertyService(db)
+    prop = await property_service.create_property(current_user, req)
     return StandardResponse(
         success=True,
         message="Property listing created successfully",
-        data=PropertyOut.model_validate(property_obj)
+        data=PropertyOut.model_validate(prop),
     )
 
 
 @properties_router.get("/{property_id}", response_model=StandardResponse[PropertyOut])
 async def get_property_by_id(property_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     """Retrieve detailed information about a property."""
-    query = (
-        select(Property)
-        .options(selectinload(Property.rooms).selectinload(Room.seats), selectinload(Property.media))
-        .where(Property.id == property_id)
-    )
-    result = await db.execute(query)
-    prop = result.scalar_one_or_none()
-    if not prop:
-        raise ResourceNotFoundError(message="Property not found")
+    property_service = PropertyService(db)
+    prop = await property_service.get_property_by_id(property_id)
     return StandardResponse(
         success=True,
         message="Property details retrieved",
-        data=PropertyOut.model_validate(prop)
+        data=PropertyOut.model_validate(prop),
     )
 
 
@@ -77,26 +67,63 @@ async def update_property(
     property_id: uuid.UUID,
     req: PropertyUpdate,
     current_user: User = Depends(require_roles(UserRole.OWNER)),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Update property details (Owner only)."""
-    query = select(Property).where(Property.id == property_id)
-    result = await db.execute(query)
-    prop = result.scalar_one_or_none()
-    if not prop:
-        raise ResourceNotFoundError(message="Property not found")
-    if prop.owner_id != current_user.id and current_user.role != UserRole.SUPER_ADMIN:
-        raise PermissionDeniedError(message="You do not own this property")
-
-    for field, val in req.model_dump(exclude_unset=True).items():
-        setattr(prop, field, val)
-
-    await db.flush()
-    await db.refresh(prop)
+    property_service = PropertyService(db)
+    prop = await property_service.update_property(property_id, current_user, req)
     return StandardResponse(
         success=True,
         message="Property updated successfully",
-        data=PropertyOut.model_validate(prop)
+        data=PropertyOut.model_validate(prop),
+    )
+
+
+@properties_router.delete("/{property_id}", response_model=StandardResponse[dict])
+async def delete_property(
+    property_id: uuid.UUID,
+    current_user: User = Depends(require_roles(UserRole.OWNER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a property listing (Owner only)."""
+    property_service = PropertyService(db)
+    await property_service.delete_property(property_id, current_user)
+    return StandardResponse(
+        success=True,
+        message="Property deleted successfully",
+        data={"property_id": str(property_id)},
+    )
+
+
+@properties_router.patch("/{property_id}/publish", response_model=StandardResponse[PropertyOut])
+async def publish_property(
+    property_id: uuid.UUID,
+    is_published: bool = Query(True),
+    current_user: User = Depends(require_roles(UserRole.OWNER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Publish or unpublish a property listing."""
+    property_service = PropertyService(db)
+    prop = await property_service.set_publish_status(property_id, current_user, is_published)
+    return StandardResponse(
+        success=True,
+        message="Property publication status updated",
+        data=PropertyOut.model_validate(prop),
+    )
+
+
+@owner_properties_router.get("", response_model=StandardResponse[List[PropertyOut]])
+async def list_my_properties(
+    current_user: User = Depends(require_roles(UserRole.OWNER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all properties owned by the current logged in owner."""
+    property_service = PropertyService(db)
+    properties = await property_service.list_owner_properties(current_user.id)
+    return StandardResponse(
+        success=True,
+        message="Owner properties retrieved",
+        data=[PropertyOut.model_validate(p) for p in properties],
     )
 
 
@@ -106,76 +133,230 @@ async def create_room(
     property_id: uuid.UUID,
     req: RoomCreate,
     current_user: User = Depends(require_roles(UserRole.OWNER)),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Add a room to a property."""
-    prop_query = select(Property).where(Property.id == property_id)
-    prop = (await db.execute(prop_query)).scalar_one_or_none()
-    if not prop:
-        raise ResourceNotFoundError(message="Property not found")
-    if prop.owner_id != current_user.id and current_user.role != UserRole.SUPER_ADMIN:
-        raise PermissionDeniedError(message="You do not own this property")
-
-    room = Room(property_id=property_id, **req.model_dump())
-    db.add(room)
-    await db.flush()
-    await db.refresh(room)
+    room_service = RoomService(db)
+    room = await room_service.create_room(property_id, current_user, req)
     return StandardResponse(
         success=True,
         message="Room added successfully",
-        data=RoomOut.model_validate(room)
+        data=RoomOut.model_validate(room),
+    )
+
+
+@rooms_router.get("/properties/{property_id}/rooms", response_model=StandardResponse[List[RoomOut]])
+async def list_rooms(property_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """List all rooms belonging to a property."""
+    room_service = RoomService(db)
+    rooms = await room_service.list_rooms(property_id)
+    return StandardResponse(
+        success=True,
+        message="Rooms retrieved",
+        data=[RoomOut.model_validate(r) for r in rooms],
+    )
+
+
+@rooms_router.get("/rooms/{room_id}", response_model=StandardResponse[RoomOut])
+async def get_room(room_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """Get single room details."""
+    room_service = RoomService(db)
+    room = await room_service.get_room_by_id(room_id)
+    return StandardResponse(
+        success=True,
+        message="Room details retrieved",
+        data=RoomOut.model_validate(room),
+    )
+
+
+@rooms_router.patch("/rooms/{room_id}", response_model=StandardResponse[RoomOut])
+async def update_room(
+    room_id: uuid.UUID,
+    req: RoomUpdate,
+    current_user: User = Depends(require_roles(UserRole.OWNER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update room details."""
+    room_service = RoomService(db)
+    room = await room_service.update_room(room_id, current_user, req)
+    return StandardResponse(
+        success=True,
+        message="Room updated successfully",
+        data=RoomOut.model_validate(room),
+    )
+
+
+@rooms_router.delete("/rooms/{room_id}", response_model=StandardResponse[dict])
+async def delete_room(
+    room_id: uuid.UUID,
+    current_user: User = Depends(require_roles(UserRole.OWNER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a room."""
+    room_service = RoomService(db)
+    await room_service.delete_room(room_id, current_user)
+    return StandardResponse(
+        success=True,
+        message="Room deleted successfully",
+        data={"room_id": str(room_id)},
+    )
+
+
+# --- SEAT ENDPOINTS ---
+@rooms_router.post("/rooms/{room_id}/seats", response_model=StandardResponse[RoomSeatOut], status_code=status.HTTP_201_CREATED)
+async def create_seat(
+    room_id: uuid.UUID,
+    req: RoomSeatCreate,
+    current_user: User = Depends(require_roles(UserRole.OWNER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a seat to a shared room."""
+    room_service = RoomService(db)
+    seat = await room_service.create_seat(room_id, current_user, req)
+    return StandardResponse(
+        success=True,
+        message="Seat added successfully",
+        data=RoomSeatOut.model_validate(seat),
+    )
+
+
+@rooms_router.get("/rooms/{room_id}/seats", response_model=StandardResponse[List[RoomSeatOut]])
+async def list_seats(room_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """List all seats in a room."""
+    room_service = RoomService(db)
+    seats = await room_service.list_seats(room_id)
+    return StandardResponse(
+        success=True,
+        message="Seats retrieved",
+        data=[RoomSeatOut.model_validate(s) for s in seats],
+    )
+
+
+@rooms_router.patch("/seats/{seat_id}", response_model=StandardResponse[RoomSeatOut])
+async def update_seat(
+    seat_id: uuid.UUID,
+    req: RoomSeatCreate,
+    current_user: User = Depends(require_roles(UserRole.OWNER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update seat details."""
+    room_service = RoomService(db)
+    seat = await room_service.update_seat(seat_id, current_user, req)
+    return StandardResponse(
+        success=True,
+        message="Seat updated successfully",
+        data=RoomSeatOut.model_validate(seat),
+    )
+
+
+@rooms_router.delete("/seats/{seat_id}", response_model=StandardResponse[dict])
+async def delete_seat(
+    seat_id: uuid.UUID,
+    current_user: User = Depends(require_roles(UserRole.OWNER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a seat."""
+    room_service = RoomService(db)
+    await room_service.delete_seat(seat_id, current_user)
+    return StandardResponse(
+        success=True,
+        message="Seat deleted successfully",
+        data={"seat_id": str(seat_id)},
     )
 
 
 # --- SEARCH ENDPOINTS ---
 @search_router.get("/properties", response_model=PaginatedResponse[SearchPropertyItem])
 async def search_properties(
-    city: Optional[str] = Query("Dhaka"),
+    city: Optional[str] = Query(None),
     area: Optional[str] = None,
     property_type: Optional[PropertyType] = None,
+    budget_min: Optional[Decimal] = None,
+    budget_max: Optional[Decimal] = None,
+    has_wifi: Optional[bool] = None,
+    has_ac: Optional[bool] = None,
+    has_lift: Optional[bool] = None,
+    has_generator: Optional[bool] = None,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    """Search available properties with filters."""
-    stmt = (
-        select(Property)
-        .options(selectinload(Property.rooms))
-        .where(Property.is_published == True)
+    """Search available properties with attribute filters."""
+    search_service = SearchService(db)
+    items, total = await search_service.search_properties(
+        city=city,
+        area=area,
+        property_type=property_type,
+        budget_min=budget_min,
+        budget_max=budget_max,
+        has_wifi=has_wifi,
+        has_ac=has_ac,
+        has_lift=has_lift,
+        has_generator=has_generator,
+        page=page,
+        limit=limit,
     )
-    if city:
-        stmt = stmt.where(Property.city.ilike(f"%{city}%"))
-    if area:
-        stmt = stmt.where(Property.area_neighborhood.ilike(f"%{area}%"))
-    if property_type:
-        stmt = stmt.where(Property.property_type == property_type)
-
-    stmt = stmt.offset((page - 1) * limit).limit(limit)
-    result = await db.execute(stmt)
-    properties = result.scalars().all()
-
-    items = []
-    for p in properties:
-        starting_rent = min([r.monthly_rent for r in p.rooms], default=0) if p.rooms else 0
-        available_rooms = sum(1 for r in p.rooms if r.is_available)
-        items.append(
-            SearchPropertyItem(
-                property_id=p.id,
-                title=p.title,
-                property_type=p.property_type,
-                area=p.area_neighborhood,
-                city=p.city,
-                latitude=p.latitude,
-                longitude=p.longitude,
-                starting_rent=starting_rent,
-                available_rooms=available_rooms,
-                tags=["WIFI"] if p.has_wifi else [],
-            )
-        )
-
+    total_pages = max(1, (total + limit - 1) // limit) if total > 0 else 1
     return PaginatedResponse(
         success=True,
         message="Properties retrieved",
         items=items,
-        meta=PaginationMeta(page=page, limit=limit, total=len(items), total_pages=1)
+        meta=PaginationMeta(page=page, limit=limit, total=total, total_pages=total_pages),
+    )
+
+
+@search_router.get("/map", response_model=PaginatedResponse[SearchPropertyItem])
+async def search_map_radius(
+    lat: float = Query(..., ge=-90, le=90, description="Latitude"),
+    lng: float = Query(..., ge=-180, le=180, description="Longitude"),
+    radius_km: float = Query(5.0, ge=0.5, le=50.0, description="Radius in kilometers"),
+    property_type: Optional[PropertyType] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Geospatial radius search centered at GPS coordinates using PostGIS."""
+    search_service = SearchService(db)
+    items, total = await search_service.search_map_radius(
+        lat=lat,
+        lng=lng,
+        radius_km=radius_km,
+        property_type=property_type,
+        page=page,
+        limit=limit,
+    )
+    total_pages = max(1, (total + limit - 1) // limit) if total > 0 else 1
+    return PaginatedResponse(
+        success=True,
+        message="Map search results retrieved",
+        items=items,
+        meta=PaginationMeta(page=page, limit=limit, total=total, total_pages=total_pages),
+    )
+
+
+@search_router.get("/roommates", response_model=StandardResponse[List[CompatibilityResult]])
+async def search_compatible_roommates(
+    current_user: User = Depends(require_roles(UserRole.BACHELOR)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Find compatible potential roommates based on lifestyle habits and preferences."""
+    from sqlalchemy import select
+    roommate_service = RoommateService(db)
+    users_query = select(User).where(
+        User.role == UserRole.BACHELOR,
+        User.id != current_user.id,
+        User.is_active == True,
+    ).limit(20)
+    candidates = (await db.execute(users_query)).scalars().all()
+
+    results = []
+    for cand in candidates:
+        comp = await roommate_service.calculate_compatibility(current_user, cand)
+        results.append(comp)
+
+    results.sort(key=lambda x: x.compatibility_score, reverse=True)
+    return StandardResponse(
+        success=True,
+        message="Roommate compatibility rankings calculated",
+        data=results,
     )

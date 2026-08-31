@@ -68,3 +68,12 @@ class UserUpdate(BaseSchema):
     occupation: Optional[str] = None
     institution_or_company: Optional[str] = None
     gender: Optional[Gender] = None
+
+
+class VerifyPhoneRequest(BaseSchema):
+    otp: str = Field(..., min_length=4, max_length=6, description="SMS OTP code e.g. 123456")
+
+
+class VerifyEmailRequest(BaseSchema):
+    token_or_code: str = Field(..., min_length=4, max_length=100, description="Email verification code or token")
+

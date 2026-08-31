@@ -40,7 +40,7 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     trust_score: Mapped[float] = mapped_column(Float, default=50.0, nullable=False)
 
     # Relationships
-    kyc = relationship("UserKYC", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    kyc = relationship("UserKYC", back_populates="user", uselist=False, foreign_keys="[UserKYC.user_id]", cascade="all, delete-orphan")
     roommate_preference = relationship("RoommatePreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
     emergency_contacts = relationship("EmergencyContact", back_populates="user", cascade="all, delete-orphan")
     properties = relationship("Property", back_populates="owner", cascade="all, delete-orphan")

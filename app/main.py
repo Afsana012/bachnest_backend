@@ -3,9 +3,11 @@
 import time
 import uuid
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
+from app.websockets.connection_manager import manager
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -74,3 +76,18 @@ async def root():
         "docs": "/docs",
         "health": f"{settings.API_V1_STR}/health"
     }
+
+
+@app.websocket("/ws/v1/emergency")
+async def emergency_websocket_endpoint(websocket: WebSocket, user_id: str = Query("guest")):
+    """Real-time WebSocket connection for receiving emergency alerts and SOS broadcasts."""
+    await manager.connect(user_id=user_id, websocket=websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Echo ping / pong
+            if data == "PING":
+                await websocket.send_text("PONG")
+    except WebSocketDisconnect:
+        manager.disconnect(user_id=user_id, websocket=websocket)
+

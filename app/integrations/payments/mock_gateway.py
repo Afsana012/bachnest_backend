@@ -1,27 +1,18 @@
-"""Payment gateway protocol and Mock Gateway implementation."""
+"""Mock Payment Gateway implementation for sandbox and local testing."""
 
-import uuid
 from decimal import Decimal
-from typing import Any, Dict, Optional, Protocol
-
-
-class PaymentGateway(Protocol):
-    async def create_checkout(self, amount: Decimal, transaction_reference: str, customer_info: Dict[str, Any]) -> Dict[str, Any]:
-        ...
-
-    async def verify_payment(self, callback_data: Dict[str, Any]) -> bool:
-        ...
+from typing import Optional
+import uuid
 
 
 class MockPaymentGateway:
-    async def create_checkout(self, amount: Decimal, transaction_reference: str, customer_info: Dict[str, Any]) -> Dict[str, Any]:
-        return {
-            "gateway": "MOCK",
-            "transaction_reference": transaction_reference,
-            "amount": str(amount),
-            "payment_url": f"https://mockpay.bachnest.com/pay/{transaction_reference}",
-            "status": "INITIATED"
-        }
+    async def create_checkout(self, payment_id: uuid.UUID, amount: Decimal, transaction_ref: str) -> str:
+        """Return simulated sandbox payment checkout URL."""
+        return f"https://sandbox.bachnest.com/pay/{transaction_ref}"
 
-    async def verify_payment(self, callback_data: Dict[str, Any]) -> bool:
-        return callback_data.get("status") in ["COMPLETED", "SUCCESS", "PAID"]
+    async def verify_webhook(self, transaction_ref: str, amount: Decimal, signature: Optional[str] = None) -> bool:
+        """Validate simulated payment webhook."""
+        # For mock sandbox, accept valid transaction reference prefix
+        if transaction_ref.startswith("TXN-"):
+            return True
+        return False
