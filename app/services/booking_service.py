@@ -12,7 +12,7 @@ from app.models.booking import Booking, Tenancy
 from app.models.property import Property
 from app.models.room import Room, RoomSeat
 from app.models.user import User
-from app.schemas.booking import BookingCreateRequest, BookingDecisionRequest
+from app.schemas.booking import BookingAdvancePayRequest, BookingCreateRequest, BookingDecisionRequest
 
 
 class BookingService:
@@ -62,6 +62,7 @@ class BookingService:
         if existing_booking:
             raise ConflictError(message="You already have a pending booking request for this room")
 
+        visit_status = "SCHEDULED" if req.preferred_visit_date else "SKIPPED"
         booking = Booking(
             tenant_id=tenant.id,
             property_id=req.property_id,
@@ -69,6 +70,10 @@ class BookingService:
             seat_id=req.seat_id,
             requested_move_in_date=req.requested_move_in_date,
             token_deposit_amount=req.token_deposit_amount,
+            preferred_visit_date=req.preferred_visit_date,
+            visit_time_slot=req.visit_time_slot,
+            visit_notes=req.visit_notes,
+            visit_status=visit_status,
             booking_status=BookingStatus.REQUESTED,
         )
         self.db.add(booking)
@@ -182,6 +187,107 @@ class BookingService:
         else:
             booking.booking_status = BookingStatus.REJECTED
             booking.cancellation_reason = req.reason or "Rejected by property owner"
+
+        await self.db.flush()
+        await self.db.refresh(booking)
+        return booking
+
+
+    async def confirm_visit(self, booking_id: uuid.UUID, owner: User, remarks: Optional[str] = None) -> Booking:
+        query = select(Booking).where(Booking.id == booking_id).with_for_update()
+        booking = (await self.db.execute(query)).scalar_one_or_none()
+        if not booking:
+            raise ResourceNotFoundError(message="Booking not found")
+
+        prop_query = select(Property).where(Property.id == booking.property_id)
+        prop = (await self.db.execute(prop_query)).scalar_one_or_none()
+        if not prop or (prop.owner_id != owner.id and owner.role != UserRole.SUPER_ADMIN):
+            raise PermissionDeniedError(message="You do not own the property for this booking")
+
+        booking.visit_status = "CONFIRMED"
+        if remarks:
+            booking.owner_remarks = remarks
+
+        await self.db.flush()
+        await self.db.refresh(booking)
+        return booking
+
+    async def mark_visited(self, booking_id: uuid.UUID, user: User) -> Booking:
+        query = select(Booking).where(Booking.id == booking_id).with_for_update()
+        booking = (await self.db.execute(query)).scalar_one_or_none()
+        if not booking:
+            raise ResourceNotFoundError(message="Booking not found")
+
+        prop_query = select(Property).where(Property.id == booking.property_id)
+        prop = (await self.db.execute(prop_query)).scalar_one_or_none()
+
+        is_tenant = booking.tenant_id == user.id
+        is_owner = prop and (prop.owner_id == user.id or user.role == UserRole.SUPER_ADMIN)
+
+        if not (is_tenant or is_owner):
+            raise PermissionDeniedError(message="Permission denied to update visit status")
+
+        booking.visit_status = "COMPLETED"
+        await self.db.flush()
+        await self.db.refresh(booking)
+        return booking
+
+    async def pay_advance(self, booking_id: uuid.UUID, tenant: User, req: BookingAdvancePayRequest) -> Booking:
+        query = select(Booking).where(Booking.id == booking_id).with_for_update()
+        booking = (await self.db.execute(query)).scalar_one_or_none()
+        if not booking:
+            raise ResourceNotFoundError(message="Booking not found")
+
+        if booking.tenant_id != tenant.id and tenant.role != UserRole.SUPER_ADMIN:
+            raise PermissionDeniedError(message="Only the requesting tenant can pay advance for this booking")
+
+        if booking.booking_status == BookingStatus.DEPOSIT_PAID or booking.booking_status == BookingStatus.ACTIVE:
+            raise ConflictError(message="Deposit has already been paid for this booking")
+
+        prop_query = select(Property).where(Property.id == booking.property_id)
+        prop = (await self.db.execute(prop_query)).scalar_one_or_none()
+
+        room_query = select(Room).where(Room.id == booking.room_id).with_for_update()
+        room = (await self.db.execute(room_query)).scalar_one_or_none()
+        if not room:
+            raise ResourceNotFoundError(message="Room not found")
+
+        agreed_rent = room.monthly_rent
+        if booking.seat_id:
+            seat_query = select(RoomSeat).where(RoomSeat.id == booking.seat_id).with_for_update()
+            seat = (await self.db.execute(seat_query)).scalar_one_or_none()
+            if not seat or seat.is_occupied:
+                raise ConflictError(message="Seat is already occupied or unavailable")
+            seat.is_occupied = True
+            agreed_rent = seat.monthly_rent
+
+        room.current_occupancy += 1
+        if room.current_occupancy >= room.total_capacity:
+            room.is_available = False
+
+        booking.token_deposit_amount = req.advance_amount
+        booking.booking_status = BookingStatus.DEPOSIT_PAID
+        booking.visit_status = "COMPLETED"
+
+        # Check existing tenancy
+        ten_query = select(Tenancy).where(Tenancy.booking_id == booking.id)
+        existing_tenancy = (await self.db.execute(ten_query)).scalar_one_or_none()
+        if not existing_tenancy and prop:
+            tenancy = Tenancy(
+                booking_id=booking.id,
+                tenant_id=booking.tenant_id,
+                owner_id=prop.owner_id,
+                property_id=booking.property_id,
+                room_id=booking.room_id,
+                seat_id=booking.seat_id,
+                agreed_monthly_rent=agreed_rent,
+                agreed_security_deposit=room.security_deposit,
+                lease_start_date=booking.requested_move_in_date,
+                notice_period_days=30,
+                status=TenancyStatus.ACTIVE,
+                agreement_status=AgreementStatus.PENDING_SIGNATURE,
+            )
+            self.db.add(tenancy)
 
         await self.db.flush()
         await self.db.refresh(booking)

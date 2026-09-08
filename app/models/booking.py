@@ -50,6 +50,10 @@ class Booking(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     token_deposit_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0.0, nullable=False)
     owner_remarks: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     cancellation_reason: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    preferred_visit_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    visit_time_slot: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    visit_notes: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    visit_status: Mapped[Optional[str]] = mapped_column(String(30), default="SCHEDULED", nullable=True)
 
     # Relationships
     tenant = relationship("User", back_populates="bookings", foreign_keys=[tenant_id])
