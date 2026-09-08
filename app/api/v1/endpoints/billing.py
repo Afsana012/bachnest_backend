@@ -3,11 +3,12 @@
 from typing import List, Optional
 import uuid
 from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, require_roles
 from app.core.constants import ComplaintStatus, PaymentMethod, UserRole
-from app.models.emergency import AuditLog
+from app.models.emergency import AuditLog, Review
 from app.models.user import User
 from app.schemas.auth import UserOut
 from app.schemas.booking import (
@@ -322,6 +323,48 @@ async def get_user_public_reviews(
         message="User reviews retrieved",
         data=[ReviewOut.model_validate(r) for r in reviews],
     )
+
+
+@reviews_router.get("/user/{user_id}/trust", response_model=StandardResponse[dict])
+async def get_user_trust_profile(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve verifiable trust score and rating metrics for a tenant or owner."""
+    user_query = select(User).where(User.id == user_id)
+    user = (await db.execute(user_query)).scalar_one_or_none()
+    if not user:
+        return StandardResponse(
+            success=False,
+            message="User not found",
+            data=None,
+        )
+
+    stats_query = select(
+        func.count(Review.id).label("total_reviews"),
+        func.avg(Review.rating).label("avg_rating")
+    ).where(
+        Review.reviewee_id == user_id,
+        Review.is_public == True
+    )
+    res = (await db.execute(stats_query)).one()
+    total_reviews = res.total_reviews or 0
+    avg_rating = round(float(res.avg_rating), 1) if res.avg_rating else 5.0
+
+    return StandardResponse(
+        success=True,
+        message="Trust profile retrieved",
+        data={
+            "user_id": str(user.id),
+            "full_name": user.full_name,
+            "role": user.role.value if hasattr(user.role, "value") else str(user.role),
+            "trust_score": user.trust_score,
+            "is_kyc_verified": user.is_kyc_verified,
+            "total_reviews": total_reviews,
+            "avg_rating": avg_rating
+        }
+    )
+
 
 
 # --- EMERGENCY SOS ---
