@@ -262,3 +262,31 @@ class SOSResolveRequest(BaseSchema):
     resolution_notes: Optional[str] = Field(None, max_length=500)
 
 
+# --- DIGITAL AGREEMENT ---
+class AgreementSignRequest(BaseSchema):
+    signature_name: str = Field(..., min_length=2, max_length=100)
+    agreed_terms: bool = Field(..., description="Must be true to sign contract")
+
+
+class DigitalAgreementOut(BaseSchema):
+    tenancy_id: uuid.UUID
+    agreement_status: AgreementStatus
+    property_title: str
+    property_address: str
+    area_neighborhood: str
+    city: str
+    room_number_or_name: str
+    owner_name: str
+    owner_phone: str
+    tenant_name: str
+    tenant_phone: str
+    tenant_nid_or_id: Optional[str] = None
+    agreed_monthly_rent: Decimal
+    agreed_security_deposit: Decimal
+    lease_start_date: date
+    lease_end_date: Optional[date] = None
+    notice_period_days: int
+    gate_closing_time: Optional[str] = None
+    visitor_policy: Optional[str] = None
+    signed_at: Optional[datetime] = None
+    signature_name: Optional[str] = None
