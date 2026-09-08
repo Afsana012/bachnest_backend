@@ -60,3 +60,4 @@ class Property(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     tenancies = relationship("Tenancy", back_populates="property")
     complaints = relationship("Complaint", back_populates="property")
     notices = relationship("Notice", back_populates="property", cascade="all, delete-orphan")
+    parking_spaces = relationship("ParkingSpace", back_populates="property", cascade="all, delete-orphan")

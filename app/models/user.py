@@ -47,3 +47,4 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     bookings = relationship("Booking", back_populates="tenant", foreign_keys="[Booking.tenant_id]", cascade="all, delete-orphan")
     tenancies_as_tenant = relationship("Tenancy", back_populates="tenant", foreign_keys="[Tenancy.tenant_id]")
     tenancies_as_owner = relationship("Tenancy", back_populates="owner", foreign_keys="[Tenancy.owner_id]")
+    parking_bookings = relationship("ParkingBooking", back_populates="user", cascade="all, delete-orphan")

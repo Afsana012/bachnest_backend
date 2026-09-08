@@ -174,3 +174,19 @@ SLA_HOURS_MAP = {
     ComplaintPriority.HIGH: 24,
     ComplaintPriority.EMERGENCY: 2,
 }
+
+
+class VehicleType(str, Enum):
+    BIKE = "BIKE"
+    CAR = "CAR"
+
+
+class ParkingRentalPlan(str, Enum):
+    DAILY = "DAILY"
+    MONTHLY = "MONTHLY"
+
+
+class ParkingBookingStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"

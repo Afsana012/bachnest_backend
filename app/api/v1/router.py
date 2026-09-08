@@ -15,6 +15,7 @@ from app.api.v1.endpoints.billing import (
 from app.api.v1.endpoints.bookings import bookings_router, tenancies_router
 from app.api.v1.endpoints.health import router as health_router
 from app.api.v1.endpoints.properties import owner_properties_router, properties_router, rooms_router, search_router
+from app.api.v1.endpoints.parking import parking_router, property_parking_router
 from app.api.v1.endpoints.users import admin_kyc_router, kyc_router, users_router
 
 api_router = APIRouter()
@@ -29,6 +30,8 @@ api_router.include_router(properties_router)
 api_router.include_router(owner_properties_router)
 api_router.include_router(rooms_router)
 api_router.include_router(search_router)
+api_router.include_router(parking_router)
+api_router.include_router(property_parking_router)
 api_router.include_router(bookings_router)
 api_router.include_router(tenancies_router)
 api_router.include_router(billing_router)
