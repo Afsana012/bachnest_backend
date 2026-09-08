@@ -251,3 +251,87 @@ async def sign_digital_agreement(
         message="Tenancy agreement digitally executed and signed successfully",
         data=TenancyOut.model_validate(tenancy),
     )
+
+
+@tenancies_router.get("/{tenancy_id}/dmp-form", response_model=StandardResponse[dict])
+async def get_tenancy_dmp_form_data(
+    tenancy_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve verified tenancy particulars for Dhaka DMP Citizen Information Form."""
+    from sqlalchemy import select
+    from app.models.booking import Tenancy
+    from app.models.kyc import UserKYC
+    from app.models.property import Property
+    from app.models.room import Room
+    from app.models.user import User
+
+    tenancy_query = select(Tenancy).where(Tenancy.id == tenancy_id)
+    tenancy = (await db.execute(tenancy_query)).scalar_one_or_none()
+    if not tenancy:
+        return StandardResponse(success=False, message="Tenancy not found", data=None)
+
+    # Tenant details
+    tenant_query = select(User).where(User.id == tenancy.tenant_id)
+    tenant = (await db.execute(tenant_query)).scalar_one_or_none()
+
+    # Owner details
+    owner_query = select(User).where(User.id == tenancy.owner_id)
+    owner = (await db.execute(owner_query)).scalar_one_or_none()
+
+    # Property details
+    prop_query = select(Property).where(Property.id == tenancy.property_id)
+    prop = (await db.execute(prop_query)).scalar_one_or_none()
+
+    # Room details
+    room_query = select(Room).where(Room.id == tenancy.room_id)
+    room = (await db.execute(room_query)).scalar_one_or_none()
+
+    # KYC details
+    kyc_query = select(UserKYC).where(UserKYC.user_id == tenancy.tenant_id)
+    kyc = (await db.execute(kyc_query)).scalar_one_or_none()
+
+    data = {
+        "tenancy_id": str(tenancy.id),
+        "lease_start_date": str(tenancy.lease_start_date),
+        "monthly_rent": float(tenancy.agreed_monthly_rent),
+        "security_deposit": float(tenancy.agreed_security_deposit),
+        "status": tenancy.status.value if hasattr(tenancy.status, "value") else str(tenancy.status),
+        "tenant": {
+            "id": str(tenant.id) if tenant else "",
+            "full_name": tenant.full_name if tenant else "",
+            "phone": tenant.phone if tenant else "",
+            "email": tenant.email if tenant else "",
+            "occupation": tenant.occupation if tenant else "Student / Professional",
+            "institution_or_company": tenant.institution_or_company if tenant else "",
+            "gender": tenant.gender.value if tenant and hasattr(tenant.gender, "value") else "OTHER",
+            "nid_number": kyc.document_number if kyc else "",
+            "is_kyc_verified": kyc.status.value == "APPROVED" if kyc and hasattr(kyc.status, "value") else False,
+        },
+        "owner": {
+            "id": str(owner.id) if owner else "",
+            "full_name": owner.full_name if owner else "",
+            "phone": owner.phone if owner else "",
+            "email": owner.email if owner else "",
+        },
+        "property": {
+            "id": str(prop.id) if prop else "",
+            "title": prop.title if prop else "",
+            "address_line": prop.address_line if prop else "",
+            "area_neighborhood": prop.area_neighborhood if prop else "",
+            "city": prop.city if prop else "Dhaka",
+            "flat_number": prop.flat_number if prop else "",
+        },
+        "room": {
+            "id": str(room.id) if room else "",
+            "room_number_or_name": room.room_number_or_name if room else "",
+            "room_type": room.room_type.value if room and hasattr(room.room_type, "value") else "SINGLE",
+        },
+    }
+
+    return StandardResponse(
+        success=True,
+        message="DMP form data retrieved",
+        data=data,
+    )
