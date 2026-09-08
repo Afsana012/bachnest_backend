@@ -6,6 +6,7 @@ from app.models.kyc import EmergencyContact, RoommatePreference, UserKYC
 from app.models.property import Property
 from app.models.room import PropertyMedia, Room, RoomSeat
 from app.models.parking import ParkingSpace, ParkingBooking
+from app.models.roommate import RoommateProfile
 from app.models.booking import Booking, Tenancy
 from app.models.invoice import Invoice, Payment
 from app.models.complaint import Complaint, Notice, NoticeRead
@@ -22,6 +23,7 @@ __all__ = [
     "RoomSeat",
     "ParkingSpace",
     "ParkingBooking",
+    "RoommateProfile",
     "PropertyMedia",
     "Booking",
     "Tenancy",

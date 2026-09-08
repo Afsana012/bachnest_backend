@@ -190,3 +190,16 @@ class ParkingBookingStatus(str, Enum):
     ACTIVE = "ACTIVE"
     EXPIRED = "EXPIRED"
     CANCELLED = "CANCELLED"
+
+
+class RoommateLookingType(str, Enum):
+    ROOM_WANTED = "ROOM_WANTED"
+    FLATSHARE = "FLATSHARE"
+    HAVE_ROOM_NEED_ROOMMATE = "HAVE_ROOM_NEED_ROOMMATE"
+
+
+class RoommateOccupationCategory(str, Enum):
+    STUDENT = "STUDENT"
+    JOB_HOLDER = "JOB_HOLDER"
+    FREELANCER = "FREELANCER"
+    OTHER = "OTHER"
