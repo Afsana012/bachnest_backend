@@ -292,6 +292,22 @@ async def mark_notice_as_read(
         data={"notice_id": str(notice_id)},
     )
 
+@notices_router.delete("/notices/{notice_id}", response_model=StandardResponse[dict])
+async def delete_notice(
+    notice_id: uuid.UUID,
+    current_user: User = Depends(require_roles(UserRole.OWNER, UserRole.SUPER_ADMIN)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Owner deletes an expired or archived building notice."""
+    notice_service = NoticeService(db)
+    await notice_service.delete_notice(notice_id, current_user)
+    return StandardResponse(
+        success=True,
+        message="Notice deleted successfully",
+        data={"notice_id": str(notice_id)},
+    )
+
+
 
 # --- REVIEWS ---
 @reviews_router.post("", response_model=StandardResponse[ReviewOut], status_code=status.HTTP_201_CREATED)
