@@ -1,104 +1,154 @@
-"""Roommate preference and compatibility matching service."""
+"""Roommate profile domain service."""
 
-from typing import List, Optional, Tuple
 import uuid
-from sqlalchemy import select
+from decimal import Decimal
+from typing import List, Optional, Tuple
+from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.kyc import RoommatePreference
+from app.models.roommate import RoommateProfile
 from app.models.user import User
-from app.schemas.kyc import CompatibilityResult, RoommatePreferenceCreate
+from app.models.kyc import UserKYC
+from app.schemas.roommate import RoommateProfileCreate, RoommateProfileOut, RoommateProfileUpdate
 
 
 class RoommateService:
-    def __init__(self, db: AsyncSession):
-        self.db = db
+    @staticmethod
+    async def list_profiles(
+        db: AsyncSession,
+        area: Optional[str] = None,
+        looking_for: Optional[str] = None,
+        gender: Optional[str] = None,
+        max_budget: Optional[Decimal] = None,
+        search: Optional[str] = None,
+        limit: int = 30,
+        offset: int = 0
+    ) -> Tuple[List[RoommateProfileOut], int]:
+        stmt = select(RoommateProfile).options(
+            selectinload(RoommateProfile.user).selectinload(User.kyc)
+        ).where(RoommateProfile.is_active == True)
 
-    async def get_or_create_preference(self, user: User, req: RoommatePreferenceCreate) -> RoommatePreference:
-        """Create or update user roommate preference."""
-        query = select(RoommatePreference).where(RoommatePreference.user_id == user.id)
-        result = await self.db.execute(query)
-        pref = result.scalar_one_or_none()
+        if looking_for and looking_for != "ALL":
+            stmt = stmt.where(RoommateProfile.looking_for == looking_for)
 
-        if not pref:
-            pref = RoommatePreference(
-                user_id=user.id,
-                **req.model_dump()
-            )
-            self.db.add(pref)
-        else:
-            for field, val in req.model_dump(exclude_unset=True).items():
-                setattr(pref, field, val)
+        if gender and gender != "ALL":
+            stmt = stmt.where(RoommateProfile.gender == gender)
 
-        await self.db.flush()
-        await self.db.refresh(pref)
-        return pref
+        if max_budget:
+            stmt = stmt.where(RoommateProfile.budget_max <= max_budget)
 
-    async def calculate_compatibility(
-        self,
-        current_user: User,
-        candidate_user: User
-    ) -> CompatibilityResult:
-        """Calculate weighted roommate compatibility score between two users."""
-        q1 = select(RoommatePreference).where(RoommatePreference.user_id == current_user.id)
-        p1 = (await self.db.execute(q1)).scalar_one_or_none()
-
-        q2 = select(RoommatePreference).where(RoommatePreference.user_id == candidate_user.id)
-        p2 = (await self.db.execute(q2)).scalar_one_or_none()
-
-        if not p1 or not p2:
-            return CompatibilityResult(
-                candidate_user_id=candidate_user.id,
-                candidate_name=candidate_user.full_name,
-                compatibility_score=50.0,
-                matched_factors=["Default Profile Match"],
+        if search:
+            q = f"%{search.lower()}%"
+            stmt = stmt.where(
+                func.lower(RoommateProfile.full_name).like(q) |
+                func.lower(RoommateProfile.occupation).like(q) |
+                func.lower(RoommateProfile.institution_or_company).like(q)
             )
 
-        matched_factors = []
-        score = 0.0
+        stmt = stmt.order_by(RoommateProfile.created_at.desc())
+        
+        # Execute query
+        result = await db.execute(stmt.offset(offset).limit(limit))
+        records = result.scalars().all()
 
-        # 1. Smoking compatibility (25%)
-        if p1.smoking_allowed == p2.smoking_allowed:
-            score += 25.0
-            matched_factors.append("Smoking Preference Aligned")
+        out_list: List[RoommateProfileOut] = []
+        for r in records:
+            if area and area != "All Areas":
+                areas_lower = [a.lower() for a in r.preferred_areas]
+                if not any(area.lower() in a for a in areas_lower):
+                    continue
 
-        # 2. Sleep schedule (20%)
-        if p1.sleep_schedule == p2.sleep_schedule or p1.sleep_schedule == "FLEXIBLE" or p2.sleep_schedule == "FLEXIBLE":
-            score += 20.0
-            matched_factors.append("Compatible Sleep Schedules")
+            kyc = r.user.kyc if r.user else None
+            is_kyc = (kyc.status.value == "APPROVED") if kyc else False
+            trust = r.user.trust_score if r.user and hasattr(r.user, "trust_score") else 90
 
-        # 3. Cleanliness level (20%)
-        diff = abs(p1.cleanliness_level - p2.cleanliness_level)
-        if diff == 0:
-            score += 20.0
-            matched_factors.append("Identical Cleanliness Standards")
-        elif diff == 1:
-            score += 15.0
-            matched_factors.append("Close Cleanliness Habits")
-        elif diff == 2:
-            score += 10.0
+            item = RoommateProfileOut(
+                id=r.id,
+                user_id=r.user_id,
+                full_name=r.full_name,
+                gender=r.gender,
+                occupation=r.occupation,
+                occupation_category=r.occupation_category,
+                institution_or_company=r.institution_or_company,
+                preferred_areas=r.preferred_areas,
+                budget_max=r.budget_max,
+                looking_for=r.looking_for,
+                move_in_date=r.move_in_date,
+                lifestyle_tags=r.lifestyle_tags,
+                bio=r.bio,
+                phone=r.phone if r.phone_visible else "",
+                phone_visible=r.phone_visible,
+                email=r.email,
+                is_active=r.is_active,
+                is_kyc_verified=is_kyc,
+                trust_score=trust,
+                created_at=r.created_at,
+                updated_at=r.updated_at
+            )
+            out_list.append(item)
 
-        # 4. Guest preference (15%)
-        if p1.guests_allowed == p2.guests_allowed:
-            score += 15.0
-            matched_factors.append("Guest Policy Aligned")
+        return out_list, len(out_list)
 
-        # 5. Dietary preference (10%)
-        if p1.dietary_preference == p2.dietary_preference or p1.dietary_preference == "ANY" or p2.dietary_preference == "ANY":
-            score += 10.0
-            matched_factors.append("Dietary Compatibility")
+    @staticmethod
+    async def get_by_user_id(db: AsyncSession, user_id: uuid.UUID) -> Optional[RoommateProfileOut]:
+        stmt = select(RoommateProfile).options(
+            selectinload(RoommateProfile.user).selectinload(User.kyc)
+        ).where(RoommateProfile.user_id == user_id)
+        result = await db.execute(stmt)
+        r = result.scalar_one_or_none()
+        if not r:
+            return None
 
-        # 6. Study habit (10%)
-        if p1.study_habit == p2.study_habit:
-            score += 10.0
-            matched_factors.append("Study Environment Aligned")
+        kyc = r.user.kyc if r.user else None
+        is_kyc = (kyc.status.value == "APPROVED") if kyc else False
+        trust = r.user.trust_score if r.user and hasattr(r.user, "trust_score") else 90
 
-        total_score = min(100.0, round(score, 1))
-
-        return CompatibilityResult(
-            candidate_user_id=candidate_user.id,
-            candidate_name=candidate_user.full_name,
-            compatibility_score=total_score,
-            matched_factors=matched_factors,
+        return RoommateProfileOut(
+            id=r.id,
+            user_id=r.user_id,
+            full_name=r.full_name,
+            gender=r.gender,
+            occupation=r.occupation,
+            occupation_category=r.occupation_category,
+            institution_or_company=r.institution_or_company,
+            preferred_areas=r.preferred_areas,
+            budget_max=r.budget_max,
+            looking_for=r.looking_for,
+            move_in_date=r.move_in_date,
+            lifestyle_tags=r.lifestyle_tags,
+            bio=r.bio,
+            phone=r.phone,
+            phone_visible=r.phone_visible,
+            email=r.email,
+            is_active=r.is_active,
+            is_kyc_verified=is_kyc,
+            trust_score=trust,
+            created_at=r.created_at,
+            updated_at=r.updated_at
         )
+
+    @staticmethod
+    async def upsert_profile(
+        db: AsyncSession,
+        user: User,
+        data: RoommateProfileCreate
+    ) -> RoommateProfileOut:
+        stmt = select(RoommateProfile).where(RoommateProfile.user_id == user.id)
+        result = await db.execute(stmt)
+        profile = result.scalar_one_or_none()
+
+        if profile:
+            for k, v in data.model_dump().items():
+                setattr(profile, k, v)
+            profile.is_active = True
+        else:
+            profile = RoommateProfile(
+                user_id=user.id,
+                **data.model_dump()
+            )
+            db.add(profile)
+
+        await db.commit()
+        await db.refresh(profile)
+        return await RoommateService.get_by_user_id(db, user.id)
