@@ -9,6 +9,8 @@ from app.api.deps import get_current_user, get_db, require_roles
 from app.core.constants import UserRole
 from app.models.user import User
 from app.schemas.booking import (
+    AgreementSignRequest,
+    DigitalAgreementOut,
     BookingAdvancePayRequest,
     BookingCreateRequest,
     BookingDecisionRequest,
@@ -214,5 +216,38 @@ async def terminate_tenancy(
     return StandardResponse(
         success=True,
         message="Tenancy terminated and inventory released",
+        data=TenancyOut.model_validate(tenancy),
+    )
+
+
+@tenancies_router.get("/{tenancy_id}/agreement", response_model=StandardResponse[DigitalAgreementOut])
+async def get_digital_agreement(
+    tenancy_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve compiled legal tenancy contract and e-signature status."""
+    tenancy_service = TenancyService(db)
+    agreement = await tenancy_service.get_digital_agreement_data(tenancy_id, current_user)
+    return StandardResponse(
+        success=True,
+        message="Digital agreement details compiled successfully",
+        data=agreement,
+    )
+
+
+@tenancies_router.post("/{tenancy_id}/sign", response_model=StandardResponse[TenancyOut])
+async def sign_digital_agreement(
+    tenancy_id: uuid.UUID,
+    req: AgreementSignRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """E-sign the digital tenancy contract and transition to SIGNED status."""
+    tenancy_service = TenancyService(db)
+    tenancy = await tenancy_service.sign_digital_agreement(tenancy_id, current_user, req)
+    return StandardResponse(
+        success=True,
+        message="Tenancy agreement digitally executed and signed successfully",
         data=TenancyOut.model_validate(tenancy),
     )
