@@ -203,3 +203,19 @@ class RoommateOccupationCategory(str, Enum):
     JOB_HOLDER = "JOB_HOLDER"
     FREELANCER = "FREELANCER"
     OTHER = "OTHER"
+
+
+class DepositRefundStatus(str, Enum):
+    REQUESTED = "REQUESTED"
+    INSPECTION_PENDING = "INSPECTION_PENDING"
+    DEDUCTIONS_PROPOSED = "DEDUCTIONS_PROPOSED"
+    SETTLED = "SETTLED"
+    DISPUTED = "DISPUTED"
+    REJECTED = "REJECTED"
+
+
+class PayoutMethod(str, Enum):
+    BKASH = "BKASH"
+    NAGAD = "NAGAD"
+    BANK_TRANSFER = "BANK_TRANSFER"
+    CASH = "CASH"
