@@ -29,11 +29,20 @@ class BookingCreateRequest(BaseSchema):
     seat_id: Optional[uuid.UUID] = None
     requested_move_in_date: date
     token_deposit_amount: Decimal = Field(default=Decimal("0.0"), ge=0)
+    preferred_visit_date: Optional[date] = None
+    visit_time_slot: Optional[str] = None
+    visit_notes: Optional[str] = None
 
 
 class BookingDecisionRequest(BaseSchema):
     decision: str = Field(..., description="APPROVE or REJECT")
     reason: Optional[str] = None
+
+
+class BookingAdvancePayRequest(BaseSchema):
+    advance_amount: Decimal = Field(..., gt=0)
+    payment_method: PaymentMethod = PaymentMethod.BKASH
+    remarks: Optional[str] = None
 
 
 class BookingOut(BaseSchema):
@@ -45,6 +54,10 @@ class BookingOut(BaseSchema):
     booking_status: BookingStatus
     requested_move_in_date: date
     token_deposit_amount: Decimal
+    preferred_visit_date: Optional[date] = None
+    visit_time_slot: Optional[str] = None
+    visit_notes: Optional[str] = None
+    visit_status: Optional[str] = None
     owner_remarks: Optional[str] = None
     cancellation_reason: Optional[str] = None
     created_at: datetime

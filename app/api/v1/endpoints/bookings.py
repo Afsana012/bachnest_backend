@@ -9,6 +9,7 @@ from app.api.deps import get_current_user, get_db, require_roles
 from app.core.constants import UserRole
 from app.models.user import User
 from app.schemas.booking import (
+    BookingAdvancePayRequest,
     BookingCreateRequest,
     BookingDecisionRequest,
     BookingOut,
@@ -101,6 +102,53 @@ async def cancel_booking(
     return StandardResponse(
         success=True,
         message="Booking request cancelled",
+        data=BookingOut.model_validate(booking),
+    )
+
+
+@bookings_router.patch("/{booking_id}/visit-confirm", response_model=StandardResponse[BookingOut])
+async def confirm_property_visit(
+    booking_id: uuid.UUID,
+    remarks: Optional[str] = Query(None),
+    current_user: User = Depends(require_roles(UserRole.OWNER, UserRole.SUPER_ADMIN)),
+    db: AsyncSession = Depends(get_db),
+):
+    booking_service = BookingService(db)
+    booking = await booking_service.confirm_visit(booking_id, current_user, remarks)
+    return StandardResponse(
+        success=True,
+        message="Property visit confirmed",
+        data=BookingOut.model_validate(booking),
+    )
+
+
+@bookings_router.patch("/{booking_id}/mark-visited", response_model=StandardResponse[BookingOut])
+async def mark_property_visited(
+    booking_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    booking_service = BookingService(db)
+    booking = await booking_service.mark_visited(booking_id, current_user)
+    return StandardResponse(
+        success=True,
+        message="Property marked as visited",
+        data=BookingOut.model_validate(booking),
+    )
+
+
+@bookings_router.post("/{booking_id}/pay-advance", response_model=StandardResponse[BookingOut])
+async def pay_booking_advance(
+    booking_id: uuid.UUID,
+    req: BookingAdvancePayRequest,
+    current_user: User = Depends(require_roles(UserRole.BACHELOR, UserRole.SUPER_ADMIN)),
+    db: AsyncSession = Depends(get_db),
+):
+    booking_service = BookingService(db)
+    booking = await booking_service.pay_advance(booking_id, current_user, req)
+    return StandardResponse(
+        success=True,
+        message="Advance deposit paid successfully. Tenancy created.",
         data=BookingOut.model_validate(booking),
     )
 
