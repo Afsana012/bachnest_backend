@@ -2,7 +2,7 @@
 
 from typing import List, Optional
 import uuid
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import TenancyStatus, UserRole
@@ -79,6 +79,14 @@ class ReviewService:
         query = select(Review).where(
             Review.reviewee_id == user_id,
             Review.is_public == True,
+        ).order_by(Review.created_at.desc())
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def list_tenancy_reviews(self, tenancy_id: uuid.UUID) -> List[Review]:
+        """List reviews submitted for a specific tenancy."""
+        query = select(Review).where(
+            Review.tenancy_id == tenancy_id
         ).order_by(Review.created_at.desc())
         result = await self.db.execute(query)
         return list(result.scalars().all())
