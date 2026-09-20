@@ -75,11 +75,15 @@ class ParkingService:
     async def list_property_parking(self, property_id: uuid.UUID) -> List[ParkingSpace]:
         query = (
             select(ParkingSpace)
+            .options(
+                selectinload(ParkingSpace.bookings).selectinload(ParkingBooking.user)
+            )
             .where(ParkingSpace.property_id == property_id)
             .order_by(ParkingSpace.created_at.asc())
         )
         result = await self.db.execute(query)
         return list(result.scalars().all())
+
 
     async def search_parking_spaces(
         self,
@@ -189,10 +193,13 @@ class ParkingService:
         await self.db.flush()
         await self.db.refresh(booking)
 
-        # Load space relation for output
+        # Load space and user relation for output
         b_query = (
             select(ParkingBooking)
-            .options(selectinload(ParkingBooking.parking_space))
+            .options(
+                selectinload(ParkingBooking.parking_space).selectinload(ParkingSpace.property),
+                selectinload(ParkingBooking.user),
+            )
             .where(ParkingBooking.id == booking.id)
         )
         b_res = await self.db.execute(b_query)
@@ -201,8 +208,26 @@ class ParkingService:
     async def list_user_parking_bookings(self, user_id: uuid.UUID) -> List[ParkingBooking]:
         query = (
             select(ParkingBooking)
-            .options(selectinload(ParkingBooking.parking_space))
+            .options(
+                selectinload(ParkingBooking.parking_space).selectinload(ParkingSpace.property),
+                selectinload(ParkingBooking.user),
+            )
             .where(ParkingBooking.user_id == user_id)
+            .order_by(ParkingBooking.created_at.desc())
+        )
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def list_owner_parking_bookings(self, owner_id: uuid.UUID) -> List[ParkingBooking]:
+        query = (
+            select(ParkingBooking)
+            .join(ParkingSpace, ParkingBooking.parking_space_id == ParkingSpace.id)
+            .join(Property, ParkingSpace.property_id == Property.id)
+            .options(
+                selectinload(ParkingBooking.parking_space).selectinload(ParkingSpace.property),
+                selectinload(ParkingBooking.user),
+            )
+            .where(Property.owner_id == owner_id)
             .order_by(ParkingBooking.created_at.desc())
         )
         result = await self.db.execute(query)
@@ -211,7 +236,10 @@ class ParkingService:
     async def cancel_parking_booking(self, booking_id: uuid.UUID, user: User) -> ParkingBooking:
         query = (
             select(ParkingBooking)
-            .options(selectinload(ParkingBooking.parking_space))
+            .options(
+                selectinload(ParkingBooking.parking_space).selectinload(ParkingSpace.property),
+                selectinload(ParkingBooking.user),
+            )
             .where(ParkingBooking.id == booking_id)
         )
         result = await self.db.execute(query)
@@ -219,7 +247,12 @@ class ParkingService:
         if not booking:
             raise ResourceNotFoundError(message="Parking booking not found")
 
-        if booking.user_id != user.id and user.role != UserRole.SUPER_ADMIN:
+        is_owner = False
+        if booking.parking_space and booking.parking_space.property:
+            if booking.parking_space.property.owner_id == user.id:
+                is_owner = True
+
+        if booking.user_id != user.id and not is_owner and user.role not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
             raise PermissionDeniedError(message="Not authorized to cancel this booking")
 
         booking.status = ParkingBookingStatus.CANCELLED

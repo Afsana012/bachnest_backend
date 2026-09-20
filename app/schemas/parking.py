@@ -27,6 +27,21 @@ class ParkingSpaceUpdate(BaseSchema):
     is_available: Optional[bool] = None
 
 
+class ParkingBookingSummary(BaseSchema):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    rental_plan: ParkingRentalPlan
+    vehicle_registration_number: str
+    start_date: date
+    end_date: Optional[date] = None
+    total_amount: Decimal
+    status: ParkingBookingStatus
+    tenant_name: Optional[str] = None
+    tenant_phone: Optional[str] = None
+    tenant_email: Optional[str] = None
+    created_at: datetime
+
+
 class ParkingSpaceOut(BaseSchema):
     id: uuid.UUID
     property_id: uuid.UUID
@@ -39,6 +54,7 @@ class ParkingSpaceOut(BaseSchema):
     is_available: bool
     created_at: datetime
     updated_at: datetime
+    active_booking: Optional[ParkingBookingSummary] = None
 
 
 class ParkingBookingCreate(BaseSchema):
@@ -61,6 +77,15 @@ class ParkingBookingOut(BaseSchema):
     created_at: datetime
     updated_at: datetime
     parking_space: Optional[ParkingSpaceOut] = None
+    tenant_name: Optional[str] = None
+    tenant_phone: Optional[str] = None
+    tenant_email: Optional[str] = None
+    space_number_or_name: Optional[str] = None
+    vehicle_type: Optional[VehicleType] = None
+    property_id: Optional[uuid.UUID] = None
+    property_title: Optional[str] = None
+    property_address: Optional[str] = None
+
 
 
 class ParkingSearchItem(BaseSchema):

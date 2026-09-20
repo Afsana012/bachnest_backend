@@ -168,6 +168,24 @@ async def get_my_parking_bookings(
     )
 
 
+@parking_router.get(
+    "/owner/bookings",
+    response_model=StandardResponse[List[ParkingBookingOut]],
+    dependencies=[Depends(require_roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SUPER_ADMIN))],
+)
+async def get_owner_parking_bookings(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    service = ParkingService(db)
+    bookings = await service.list_owner_parking_bookings(current_user.id)
+    return StandardResponse(
+        success=True,
+        message="Owner parking reservations retrieved successfully",
+        data=[ParkingBookingOut.model_validate(b) for b in bookings],
+    )
+
+
 @parking_router.post(
     "/bookings/{booking_id}/cancel",
     response_model=StandardResponse[ParkingBookingOut],
@@ -184,3 +202,4 @@ async def cancel_parking_booking(
         message="Parking booking cancelled successfully",
         data=ParkingBookingOut.model_validate(booking),
     )
+
