@@ -30,6 +30,8 @@ class BookingService:
             raise ResourceNotFoundError(message="Property not found")
         if not prop.is_published:
             raise InvalidBookingError(message="Property is not currently available for booking")
+        if prop.owner_id == tenant.id:
+            raise InvalidBookingError(message="You cannot book or schedule a visit for your own property")
 
         # 2. Lock Room with row-level lock
         room_query = (

@@ -31,7 +31,7 @@ tenancies_router = APIRouter(prefix="/tenancies", tags=["Tenancies"])
 @bookings_router.post("/request", response_model=StandardResponse[BookingOut], status_code=status.HTTP_201_CREATED)
 async def create_booking_request(
     req: BookingCreateRequest,
-    current_user: User = Depends(require_roles(UserRole.BACHELOR)),
+    current_user: User = Depends(require_roles(UserRole.BACHELOR, UserRole.OWNER)),
     db: AsyncSession = Depends(get_db),
 ):
     """Submit a room/seat rental booking request."""
@@ -144,7 +144,7 @@ async def mark_property_visited(
 async def pay_booking_advance(
     booking_id: uuid.UUID,
     req: BookingAdvancePayRequest,
-    current_user: User = Depends(require_roles(UserRole.BACHELOR, UserRole.SUPER_ADMIN)),
+    current_user: User = Depends(require_roles(UserRole.BACHELOR, UserRole.OWNER, UserRole.SUPER_ADMIN)),
     db: AsyncSession = Depends(get_db),
 ):
     booking_service = BookingService(db)
