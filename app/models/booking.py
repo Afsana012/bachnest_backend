@@ -5,7 +5,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
-from sqlalchemy import Date, DateTime, Enum as SQLEnum, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Date, DateTime, Enum as SQLEnum, ForeignKey, Integer, Numeric, String, Text, inspect
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -65,70 +65,110 @@ class Booking(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     @builtins.property
     def property_title(self) -> Optional[str]:
+        if "property" in inspect(self).unloaded:
+            return None
         return self.property.title if self.property else None
 
     @builtins.property
     def property_address(self) -> Optional[str]:
+        if "property" in inspect(self).unloaded:
+            return None
         return self.property.address_line if self.property else None
 
     @builtins.property
     def area_neighborhood(self) -> Optional[str]:
+        if "property" in inspect(self).unloaded:
+            return None
         return self.property.area_neighborhood if self.property else None
 
     @builtins.property
     def city(self) -> Optional[str]:
+        if "property" in inspect(self).unloaded:
+            return None
         return self.property.city if self.property else None
 
     @builtins.property
     def flat_number(self) -> Optional[str]:
+        if "property" in inspect(self).unloaded:
+            return None
         return self.property.flat_number if self.property else None
 
     @builtins.property
     def gate_closing_time(self) -> Optional[str]:
+        if "property" in inspect(self).unloaded:
+            return None
         return self.property.gate_closing_time if self.property else None
 
     @builtins.property
     def visitor_policy(self) -> Optional[str]:
+        if "property" in inspect(self).unloaded:
+            return None
         return self.property.visitor_policy if self.property else None
 
     @builtins.property
     def room_number_or_name(self) -> Optional[str]:
+        if "room" in inspect(self).unloaded:
+            return None
         return self.room.room_number_or_name if self.room else None
 
     @builtins.property
     def monthly_rent(self) -> Optional[Decimal]:
+        if "room" in inspect(self).unloaded:
+            return None
         return self.room.monthly_rent if self.room else None
 
     @builtins.property
     def security_deposit(self) -> Optional[Decimal]:
+        if "room" in inspect(self).unloaded:
+            return None
         return self.room.security_deposit if self.room else None
 
     @builtins.property
     def owner_id(self) -> Optional[uuid.UUID]:
+        if "property" in inspect(self).unloaded:
+            return None
         return self.property.owner_id if self.property else None
 
     @builtins.property
     def owner_name(self) -> Optional[str]:
-        return self.property.owner.full_name if self.property and self.property.owner else None
+        if "property" in inspect(self).unloaded:
+            return None
+        if not self.property or "owner" in inspect(self.property).unloaded:
+            return None
+        return self.property.owner.full_name if self.property.owner else None
 
     @builtins.property
     def owner_phone(self) -> Optional[str]:
-        return self.property.owner.phone if self.property and self.property.owner else None
+        if "property" in inspect(self).unloaded:
+            return None
+        if not self.property or "owner" in inspect(self.property).unloaded:
+            return None
+        return self.property.owner.phone if self.property.owner else None
 
     @builtins.property
     def owner_email(self) -> Optional[str]:
-        return self.property.owner.email if self.property and self.property.owner else None
+        if "property" in inspect(self).unloaded:
+            return None
+        if not self.property or "owner" in inspect(self.property).unloaded:
+            return None
+        return self.property.owner.email if self.property.owner else None
 
     @builtins.property
     def tenant_name(self) -> Optional[str]:
+        if "tenant" in inspect(self).unloaded:
+            return None
         return self.tenant.full_name if self.tenant else None
 
     @builtins.property
     def tenant_phone(self) -> Optional[str]:
+        if "tenant" in inspect(self).unloaded:
+            return None
         return self.tenant.phone if self.tenant else None
 
     @builtins.property
     def tenant_email(self) -> Optional[str]:
+        if "tenant" in inspect(self).unloaded:
+            return None
         return self.tenant.email if self.tenant else None
 
 

@@ -82,8 +82,8 @@ class BookingService:
         )
         self.db.add(booking)
         await self.db.flush()
-        await self.db.refresh(booking)
-        return booking
+        query = select(Booking).options(*self._eager_options()).where(Booking.id == booking.id)
+        return (await self.db.execute(query)).scalar_one()
 
     def _eager_options(self):
         return (
@@ -157,8 +157,8 @@ class BookingService:
         booking.cancellation_reason = reason or "Cancelled by user"
 
         await self.db.flush()
-        await self.db.refresh(booking)
-        return booking
+        query = select(Booking).options(*self._eager_options()).where(Booking.id == booking.id)
+        return (await self.db.execute(query)).scalar_one()
 
     async def owner_decision(self, booking_id: uuid.UUID, owner: User, req: BookingDecisionRequest) -> Booking:
         """Owner approves or rejects booking, creating Tenancy atomically on approval."""
@@ -223,8 +223,8 @@ class BookingService:
             booking.cancellation_reason = req.reason or "Rejected by property owner"
 
         await self.db.flush()
-        await self.db.refresh(booking)
-        return booking
+        query = select(Booking).options(*self._eager_options()).where(Booking.id == booking.id)
+        return (await self.db.execute(query)).scalar_one()
 
 
     async def confirm_visit(self, booking_id: uuid.UUID, owner: User, remarks: Optional[str] = None) -> Booking:
@@ -243,8 +243,8 @@ class BookingService:
             booking.owner_remarks = remarks
 
         await self.db.flush()
-        await self.db.refresh(booking)
-        return booking
+        query = select(Booking).options(*self._eager_options()).where(Booking.id == booking.id)
+        return (await self.db.execute(query)).scalar_one()
 
     async def mark_visited(self, booking_id: uuid.UUID, user: User) -> Booking:
         query = select(Booking).where(Booking.id == booking_id).with_for_update()
@@ -263,8 +263,8 @@ class BookingService:
 
         booking.visit_status = "COMPLETED"
         await self.db.flush()
-        await self.db.refresh(booking)
-        return booking
+        query = select(Booking).options(*self._eager_options()).where(Booking.id == booking.id)
+        return (await self.db.execute(query)).scalar_one()
 
     async def pay_advance(self, booking_id: uuid.UUID, tenant: User, req: BookingAdvancePayRequest) -> Booking:
         query = select(Booking).where(Booking.id == booking_id).with_for_update()
@@ -324,5 +324,5 @@ class BookingService:
             self.db.add(tenancy)
 
         await self.db.flush()
-        await self.db.refresh(booking)
-        return booking
+        query = select(Booking).options(*self._eager_options()).where(Booking.id == booking.id)
+        return (await self.db.execute(query)).scalar_one()
