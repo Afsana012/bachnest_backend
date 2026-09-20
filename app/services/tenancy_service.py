@@ -136,6 +136,10 @@ class TenancyService:
             visitor_policy=tenancy.property.visitor_policy if tenancy.property else "Allowed with prior notification",
             signed_at=tenancy.updated_at if tenancy.agreement_status == AgreementStatus.SIGNED else None,
             signature_name=tenancy.digital_agreement_url if tenancy.digital_agreement_url else None,
+            tenant_signed="TENANT" in (tenancy.digital_agreement_url or "").upper() or (tenancy.agreement_status == AgreementStatus.SIGNED and "LANDLORD" not in (tenancy.digital_agreement_url or "").upper()),
+            owner_signed="LANDLORD" in (tenancy.digital_agreement_url or "").upper(),
+            tenant_signature=next((p.strip() for p in (tenancy.digital_agreement_url or "").split("|") if "TENANT" in p.upper()), None) or (tenancy.digital_agreement_url if tenancy.agreement_status == AgreementStatus.SIGNED and "LANDLORD" not in (tenancy.digital_agreement_url or "").upper() else None),
+            owner_signature=next((p.strip() for p in (tenancy.digital_agreement_url or "").split("|") if "LANDLORD" in p.upper()), None),
         )
 
     async def sign_digital_agreement(
@@ -150,16 +154,28 @@ class TenancyService:
         if not tenancy:
             raise ResourceNotFoundError(message="Tenancy agreement not found")
 
-        if user.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN) and tenancy.tenant_id != user.id:
-            raise PermissionDeniedError(message="Only the designated tenant can execute this agreement")
+        is_tenant = tenancy.tenant_id == user.id
+        is_owner = tenancy.owner_id == user.id
+        is_admin = user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN)
 
-        if tenancy.agreement_status == AgreementStatus.SIGNED:
-            return tenancy
+        if not (is_tenant or is_owner or is_admin):
+            raise PermissionDeniedError(message="Only the designated tenant, landlord, or admin can execute this agreement")
+
+        role_label = "LANDLORD" if is_owner else "TENANT"
+        timestamp_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        sig_entry = f"[{role_label}: {req.signature_name.strip().upper()} ({timestamp_str})]"
+
+        if tenancy.digital_agreement_url:
+            if role_label not in tenancy.digital_agreement_url.upper():
+                tenancy.digital_agreement_url = f"{tenancy.digital_agreement_url} | {sig_entry}"
+            else:
+                tenancy.digital_agreement_url = sig_entry
+        else:
+            tenancy.digital_agreement_url = sig_entry
 
         tenancy.agreement_status = AgreementStatus.SIGNED
-        timestamp_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        tenancy.digital_agreement_url = f"E-SIGNED BY {req.signature_name.strip().upper()} ({timestamp_str})"
 
         await self.db.flush()
         await self.db.refresh(tenancy)
         return tenancy
+

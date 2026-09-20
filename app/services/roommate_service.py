@@ -7,10 +7,17 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.roommate import RoommateProfile
+from app.core.exceptions import ResourceNotFoundError
+from app.models.roommate import RoommateMessage, RoommateProfile
 from app.models.user import User
 from app.models.kyc import UserKYC
-from app.schemas.roommate import RoommateProfileCreate, RoommateProfileOut, RoommateProfileUpdate
+from app.schemas.roommate import (
+    RoommateMessageCreate,
+    RoommateMessageOut,
+    RoommateProfileCreate,
+    RoommateProfileOut,
+    RoommateProfileUpdate,
+)
 
 
 class RoommateService:
@@ -152,3 +159,75 @@ class RoommateService:
         await db.commit()
         await db.refresh(profile)
         return await RoommateService.get_by_user_id(db, user.id)
+
+    @staticmethod
+    async def send_message(
+        db: AsyncSession,
+        profile_id_or_user_id: str,
+        data: RoommateMessageCreate,
+        sender_user: Optional[User] = None
+    ) -> RoommateMessageOut:
+        recipient_id = None
+        profile_uuid = None
+        try:
+            parsed_uuid = uuid.UUID(str(profile_id_or_user_id))
+            stmt = select(RoommateProfile).where(RoommateProfile.id == parsed_uuid)
+            res = await db.execute(stmt)
+            prof = res.scalar_one_or_none()
+            if prof:
+                profile_uuid = prof.id
+                recipient_id = prof.user_id
+            else:
+                recipient_id = parsed_uuid
+        except ValueError:
+            pass
+
+        msg = RoommateMessage(
+            roommate_profile_id=profile_uuid,
+            sender_id=sender_user.id if sender_user else None,
+            recipient_user_id=recipient_id,
+            sender_name=data.sender_name.strip(),
+            sender_contact=data.sender_contact.strip(),
+            message=data.message.strip(),
+            is_read=False
+        )
+        db.add(msg)
+        await db.commit()
+        await db.refresh(msg)
+        return RoommateMessageOut.model_validate(msg)
+
+    @staticmethod
+    async def list_user_messages(
+        db: AsyncSession,
+        user: User
+    ) -> List[RoommateMessageOut]:
+        stmt = (
+            select(RoommateMessage)
+            .where(
+                (RoommateMessage.recipient_user_id == user.id) |
+                (RoommateMessage.sender_id == user.id)
+            )
+            .order_by(RoommateMessage.created_at.desc())
+        )
+        res = await db.execute(stmt)
+        records = res.scalars().all()
+        return [RoommateMessageOut.model_validate(r) for r in records]
+
+    @staticmethod
+    async def reply_message(
+        db: AsyncSession,
+        message_id: uuid.UUID,
+        reply_text: str,
+        user: User
+    ) -> RoommateMessageOut:
+        stmt = select(RoommateMessage).where(RoommateMessage.id == message_id)
+        res = await db.execute(stmt)
+        msg = res.scalar_one_or_none()
+        if not msg:
+            raise ResourceNotFoundError(message="Message not found")
+        msg.reply = reply_text.strip()
+        msg.is_read = True
+        await db.commit()
+        await db.refresh(msg)
+        return RoommateMessageOut.model_validate(msg)
+

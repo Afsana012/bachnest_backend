@@ -1,10 +1,12 @@
 """Booking service managing booking requests, concurrency-safe approvals, and rejections."""
 
+from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
 import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.constants import AgreementStatus, BookingStatus, TenancyStatus, UserRole
 from app.core.exceptions import ConflictError, InvalidBookingError, PermissionDeniedError, ResourceNotFoundError
@@ -81,37 +83,67 @@ class BookingService:
         await self.db.refresh(booking)
         return booking
 
+    def _eager_options(self):
+        return (
+            selectinload(Booking.property).selectinload(Property.owner),
+            selectinload(Booking.room),
+            selectinload(Booking.tenant),
+        )
+
     async def get_booking_by_id(self, booking_id: uuid.UUID, user: User) -> Booking:
         """Retrieve booking by ID with authorization checks."""
-        query = select(Booking).where(Booking.id == booking_id)
+        query = (
+            select(Booking)
+            .options(*self._eager_options())
+            .where(Booking.id == booking_id)
+        )
         booking = (await self.db.execute(query)).scalar_one_or_none()
         if not booking:
             raise ResourceNotFoundError(message="Booking not found")
 
         if user.role != UserRole.SUPER_ADMIN and user.role != UserRole.ADMIN:
             if booking.tenant_id != user.id:
-                # Check if user is the owner of the property
-                prop_query = select(Property).where(Property.id == booking.property_id)
-                prop = (await self.db.execute(prop_query)).scalar_one_or_none()
-                if not prop or prop.owner_id != user.id:
+                if not booking.property or (booking.property.owner_id != user.id):
                     raise PermissionDeniedError(message="You do not have permission to view this booking")
 
         return booking
 
     async def list_user_bookings(self, user: User) -> List[Booking]:
-        """List bookings for tenant or owner."""
+        """List bookings for tenant or owner with eager loaded relations."""
         if user.role == UserRole.OWNER:
             query = (
                 select(Booking)
                 .join(Property, Property.id == Booking.property_id)
                 .where(Property.owner_id == user.id)
+                .options(*self._eager_options())
                 .order_by(Booking.created_at.desc())
             )
         else:
-            query = select(Booking).where(Booking.tenant_id == user.id).order_by(Booking.created_at.desc())
+            query = (
+                select(Booking)
+                .where(Booking.tenant_id == user.id)
+                .options(*self._eager_options())
+                .order_by(Booking.created_at.desc())
+            )
 
         result = await self.db.execute(query)
         return list(result.scalars().all())
+
+    async def append_message(self, booking_id: uuid.UUID, user: User, message: str) -> Booking:
+        """Append communication message/chat between tenant and owner."""
+        booking = await self.get_booking_by_id(booking_id, user)
+        timestamp = datetime.now().strftime("%d %b, %I:%M %p")
+        sender_role = "Landlord" if (booking.property and booking.property.owner_id == user.id) else "Tenant"
+        new_entry = f"[{sender_role} - {user.full_name} ({timestamp})]: {message.strip()}"
+
+        if booking.visit_notes:
+            booking.visit_notes = f"{booking.visit_notes}\n{new_entry}"
+        else:
+            booking.visit_notes = new_entry
+
+        await self.db.flush()
+        await self.db.refresh(booking)
+        return await self.get_booking_by_id(booking_id, user)
 
     async def cancel_booking(self, booking_id: uuid.UUID, user: User, reason: Optional[str] = None) -> Booking:
         """Cancel an open booking request."""

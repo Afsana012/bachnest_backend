@@ -45,6 +45,10 @@ class BookingAdvancePayRequest(BaseSchema):
     remarks: Optional[str] = None
 
 
+class BookingMessageRequest(BaseSchema):
+    message: str = Field(..., min_length=1, max_length=1000)
+
+
 class BookingOut(BaseSchema):
     id: uuid.UUID
     tenant_id: uuid.UUID
@@ -61,6 +65,26 @@ class BookingOut(BaseSchema):
     owner_remarks: Optional[str] = None
     cancellation_reason: Optional[str] = None
     created_at: datetime
+
+    # Enriched Property & Contact metadata
+    property_title: Optional[str] = None
+    property_address: Optional[str] = None
+    area_neighborhood: Optional[str] = None
+    city: Optional[str] = None
+    flat_number: Optional[str] = None
+    gate_closing_time: Optional[str] = None
+    visitor_policy: Optional[str] = None
+    room_number_or_name: Optional[str] = None
+    monthly_rent: Optional[Decimal] = None
+    security_deposit: Optional[Decimal] = None
+    owner_id: Optional[uuid.UUID] = None
+    owner_name: Optional[str] = None
+    owner_phone: Optional[str] = None
+    owner_email: Optional[str] = None
+    tenant_name: Optional[str] = None
+    tenant_phone: Optional[str] = None
+    tenant_email: Optional[str] = None
+
 
 
 # --- TENANCY ---
@@ -290,3 +314,8 @@ class DigitalAgreementOut(BaseSchema):
     visitor_policy: Optional[str] = None
     signed_at: Optional[datetime] = None
     signature_name: Optional[str] = None
+    tenant_signed: bool = False
+    owner_signed: bool = False
+    tenant_signature: Optional[str] = None
+    owner_signature: Optional[str] = None
+

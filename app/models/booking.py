@@ -1,5 +1,6 @@
 """Booking and Tenancy domain models."""
 
+import builtins
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -61,6 +62,75 @@ class Booking(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     room = relationship("Room", back_populates="bookings")
     seat = relationship("RoomSeat", back_populates="bookings")
     tenancy = relationship("Tenancy", back_populates="booking", uselist=False)
+
+    @builtins.property
+    def property_title(self) -> Optional[str]:
+        return self.property.title if self.property else None
+
+    @builtins.property
+    def property_address(self) -> Optional[str]:
+        return self.property.address_line if self.property else None
+
+    @builtins.property
+    def area_neighborhood(self) -> Optional[str]:
+        return self.property.area_neighborhood if self.property else None
+
+    @builtins.property
+    def city(self) -> Optional[str]:
+        return self.property.city if self.property else None
+
+    @builtins.property
+    def flat_number(self) -> Optional[str]:
+        return self.property.flat_number if self.property else None
+
+    @builtins.property
+    def gate_closing_time(self) -> Optional[str]:
+        return self.property.gate_closing_time if self.property else None
+
+    @builtins.property
+    def visitor_policy(self) -> Optional[str]:
+        return self.property.visitor_policy if self.property else None
+
+    @builtins.property
+    def room_number_or_name(self) -> Optional[str]:
+        return self.room.room_number_or_name if self.room else None
+
+    @builtins.property
+    def monthly_rent(self) -> Optional[Decimal]:
+        return self.room.monthly_rent if self.room else None
+
+    @builtins.property
+    def security_deposit(self) -> Optional[Decimal]:
+        return self.room.security_deposit if self.room else None
+
+    @builtins.property
+    def owner_id(self) -> Optional[uuid.UUID]:
+        return self.property.owner_id if self.property else None
+
+    @builtins.property
+    def owner_name(self) -> Optional[str]:
+        return self.property.owner.full_name if self.property and self.property.owner else None
+
+    @builtins.property
+    def owner_phone(self) -> Optional[str]:
+        return self.property.owner.phone if self.property and self.property.owner else None
+
+    @builtins.property
+    def owner_email(self) -> Optional[str]:
+        return self.property.owner.email if self.property and self.property.owner else None
+
+    @builtins.property
+    def tenant_name(self) -> Optional[str]:
+        return self.tenant.full_name if self.tenant else None
+
+    @builtins.property
+    def tenant_phone(self) -> Optional[str]:
+        return self.tenant.phone if self.tenant else None
+
+    @builtins.property
+    def tenant_email(self) -> Optional[str]:
+        return self.tenant.email if self.tenant else None
+
 
 
 class Tenancy(Base, UUIDPrimaryKeyMixin, TimestampMixin):

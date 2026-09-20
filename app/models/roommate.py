@@ -2,7 +2,7 @@
 
 import uuid
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 from sqlalchemy import Boolean, Enum as SQLEnum, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -50,3 +50,32 @@ class RoommateProfile(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     user = relationship("User", backref="roommate_profile")
+
+
+class RoommateMessage(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    __tablename__ = "roommate_messages"
+
+    roommate_profile_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("roommate_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    sender_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    recipient_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    sender_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    sender_contact: Mapped[str] = mapped_column(String(255), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    reply: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+

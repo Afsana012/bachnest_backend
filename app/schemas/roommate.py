@@ -59,3 +59,31 @@ class RoommateProfileOut(RoommateProfileBase):
 
     class Config:
         from_attributes = True
+
+
+class RoommateMessageCreate(BaseModel):
+    sender_name: str = Field(..., min_length=2, max_length=255)
+    sender_contact: str = Field(..., min_length=5, max_length=255, description="Phone / WhatsApp or Email")
+    message: str = Field(..., min_length=3, max_length=2000)
+
+
+class RoommateMessageReply(BaseModel):
+    reply: str = Field(..., min_length=1, max_length=2000)
+
+
+class RoommateMessageOut(BaseModel):
+    id: uuid.UUID
+    roommate_profile_id: Optional[uuid.UUID] = None
+    sender_id: Optional[uuid.UUID] = None
+    recipient_user_id: Optional[uuid.UUID] = None
+    sender_name: str
+    sender_contact: str
+    message: str
+    reply: Optional[str] = None
+    is_read: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+

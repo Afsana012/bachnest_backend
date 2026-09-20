@@ -14,6 +14,7 @@ from app.schemas.booking import (
     BookingAdvancePayRequest,
     BookingCreateRequest,
     BookingDecisionRequest,
+    BookingMessageRequest,
     BookingOut,
     TenancyNoticeRequest,
     TenancyOut,
@@ -151,6 +152,23 @@ async def pay_booking_advance(
     return StandardResponse(
         success=True,
         message="Advance deposit paid successfully. Tenancy created.",
+        data=BookingOut.model_validate(booking),
+    )
+
+
+@bookings_router.post("/{booking_id}/message", response_model=StandardResponse[BookingOut])
+async def send_booking_message(
+    booking_id: uuid.UUID,
+    req: BookingMessageRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Send communication or message between tenant and landlord regarding visit or lease."""
+    booking_service = BookingService(db)
+    booking = await booking_service.append_message(booking_id, current_user, req.message)
+    return StandardResponse(
+        success=True,
+        message="Message sent successfully",
         data=BookingOut.model_validate(booking),
     )
 
