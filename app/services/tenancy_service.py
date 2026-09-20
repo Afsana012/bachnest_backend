@@ -23,11 +23,15 @@ class TenancyService:
         """List tenancies for tenant or owner."""
         if user.role == UserRole.OWNER:
             query = select(Tenancy).where(Tenancy.owner_id == user.id).order_by(Tenancy.created_at.desc())
-        elif user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
-            query = select(Tenancy).order_by(Tenancy.created_at.desc())
         else:
             query = select(Tenancy).where(Tenancy.tenant_id == user.id).order_by(Tenancy.created_at.desc())
 
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def list_all_tenancies(self) -> List[Tenancy]:
+        """List all platform tenancies for administration."""
+        query = select(Tenancy).order_by(Tenancy.created_at.desc())
         result = await self.db.execute(query)
         return list(result.scalars().all())
 

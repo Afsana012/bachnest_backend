@@ -48,3 +48,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
     message: str = "Items retrieved successfully"
     items: List[T] = Field(default_factory=list)
     meta: PaginationMeta
+
+
+# Alias for compatibility
+ResponseModel = StandardResponse

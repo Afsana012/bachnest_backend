@@ -127,10 +127,14 @@ class BillingService:
                 .where(Tenancy.owner_id == user.id)
                 .order_by(Invoice.created_at.desc())
             )
-        elif user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
-            query = select(Invoice).order_by(Invoice.created_at.desc())
         else:
             query = select(Invoice).where(Invoice.tenant_id == user.id).order_by(Invoice.created_at.desc())
 
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def list_all_invoices(self) -> List[Invoice]:
+        """List all platform invoices for administration."""
+        query = select(Invoice).order_by(Invoice.created_at.desc())
         result = await self.db.execute(query)
         return list(result.scalars().all())

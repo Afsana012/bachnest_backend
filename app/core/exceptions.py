@@ -24,6 +24,16 @@ class AppException(Exception):
         self.details = details
 
 
+class BadRequestError(AppException):
+    def __init__(self, message: str = "Invalid request parameters", details: Optional[Any] = None):
+        super().__init__(
+            message=message,
+            code="BAD_REQUEST",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            details=details,
+        )
+
+
 class ResourceNotFoundError(AppException):
     def __init__(self, message: str = "Requested resource was not found", details: Optional[Any] = None):
         super().__init__(
@@ -169,3 +179,8 @@ def register_exception_handlers(app: FastAPI) -> None:
                 },
             },
         )
+
+# Exception Aliases for compatibility
+NotFoundException = ResourceNotFoundError
+ForbiddenException = PermissionDeniedError
+ValidationException = BadRequestError
