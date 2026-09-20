@@ -58,7 +58,7 @@ async def search_parking(
     "/{property_id}/parking",
     response_model=StandardResponse[ParkingSpaceOut],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_roles([UserRole.OWNER, UserRole.ADMIN, UserRole.SUPER_ADMIN]))],
+    dependencies=[Depends(require_roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SUPER_ADMIN))],
 )
 async def create_parking_space(
     property_id: uuid.UUID,
@@ -95,7 +95,7 @@ async def list_property_parking(
 @parking_router.patch(
     "/{parking_id}",
     response_model=StandardResponse[ParkingSpaceOut],
-    dependencies=[Depends(require_roles([UserRole.OWNER, UserRole.ADMIN, UserRole.SUPER_ADMIN]))],
+    dependencies=[Depends(require_roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SUPER_ADMIN))],
 )
 async def update_parking_space(
     parking_id: uuid.UUID,
@@ -115,7 +115,7 @@ async def update_parking_space(
 @parking_router.delete(
     "/{parking_id}",
     response_model=StandardResponse[dict],
-    dependencies=[Depends(require_roles([UserRole.OWNER, UserRole.ADMIN, UserRole.SUPER_ADMIN]))],
+    dependencies=[Depends(require_roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SUPER_ADMIN))],
 )
 async def delete_parking_space(
     parking_id: uuid.UUID,

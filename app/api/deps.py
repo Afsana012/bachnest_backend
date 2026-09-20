@@ -79,10 +79,17 @@ async def get_optional_user(
         return None
 
 
-def require_roles(*allowed_roles: UserRole) -> Callable:
+def require_roles(*allowed_roles) -> Callable:
     """Dependency factory enforcing Role-Based Access Control."""
+    roles = set()
+    for item in allowed_roles:
+        if isinstance(item, (list, tuple, set)):
+            roles.update(item)
+        else:
+            roles.add(item)
+
     async def role_checker(current_user: User = Depends(get_current_user)) -> User:
-        if current_user.role not in allowed_roles and current_user.role != UserRole.SUPER_ADMIN:
+        if current_user.role not in roles and current_user.role != UserRole.SUPER_ADMIN:
             raise PermissionDeniedError(
                 message=f"Access forbidden: User role '{current_user.role.value}' does not have required permissions"
             )
