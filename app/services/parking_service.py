@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from typing import List, Optional
 import uuid
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -101,14 +101,21 @@ class ParkingService:
             select(ParkingSpace, Property, User)
             .join(Property, ParkingSpace.property_id == Property.id)
             .join(User, Property.owner_id == User.id)
-            .where(Property.is_published == True)
         )
 
         if only_available:
             query = query.where(ParkingSpace.is_available == True)
 
         if area:
-            query = query.where(Property.area_neighborhood.ilike(f"%{area}%"))
+            area_term = f"%{area.strip()}%"
+            query = query.where(
+                or_(
+                    Property.area_neighborhood.ilike(area_term),
+                    Property.address_line.ilike(area_term),
+                    Property.title.ilike(area_term),
+                    Property.city.ilike(area_term),
+                )
+            )
 
         if vehicle_type:
             query = query.where(ParkingSpace.vehicle_type == vehicle_type)
