@@ -236,6 +236,10 @@ class EmergencyAlertOut(BaseSchema):
     is_active: bool
     resolved_at: Optional[datetime] = None
     created_at: datetime
+    user_name: Optional[str] = None
+    user_phone: Optional[str] = None
+    property_title: Optional[str] = None
+    resolution_notes: Optional[str] = None
 
 
 # --- NOTICES ---

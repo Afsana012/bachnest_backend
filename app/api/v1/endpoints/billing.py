@@ -483,6 +483,38 @@ async def resolve_emergency_sos(
     )
 
 
+@emergency_router.get("", response_model=StandardResponse[List[EmergencyAlertOut]])
+async def list_emergency_alerts(
+    only_active: bool = Query(False),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve all emergency SOS alerts for admin console."""
+    emergency_service = EmergencyService(db)
+    alerts = await emergency_service.list_active_emergencies(only_active=only_active)
+    return StandardResponse(
+        success=True,
+        message="Emergency alerts retrieved",
+        data=alerts,
+    )
+
+
+@admin_router.get("/emergencies", response_model=StandardResponse[List[EmergencyAlertOut]])
+async def list_admin_emergencies(
+    only_active: bool = Query(False),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve all emergency SOS alerts for admin console."""
+    emergency_service = EmergencyService(db)
+    alerts = await emergency_service.list_active_emergencies(only_active=only_active)
+    return StandardResponse(
+        success=True,
+        message="Emergency alerts retrieved",
+        data=alerts,
+    )
+
+
 # --- ADMIN DASHBOARD & MODERATION ---
 @admin_router.get("/dashboard", response_model=StandardResponse[dict])
 async def get_admin_dashboard_stats(

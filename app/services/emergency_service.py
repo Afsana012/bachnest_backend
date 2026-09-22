@@ -10,8 +10,9 @@ from app.core.constants import UserRole
 from app.core.exceptions import PermissionDeniedError, ResourceNotFoundError
 from app.models.booking import Tenancy
 from app.models.emergency import EmergencyAlert
+from app.models.property import Property
 from app.models.user import User
-from app.schemas.booking import SOSRequest, SOSResolveRequest
+from app.schemas.booking import EmergencyAlertOut, SOSRequest, SOSResolveRequest
 from app.websockets.connection_manager import manager
 
 
@@ -87,8 +88,38 @@ class EmergencyService:
         await self.db.refresh(alert)
         return alert
 
-    async def list_active_emergencies(self) -> List[EmergencyAlert]:
-        """Admin console query to view active emergencies."""
-        query = select(EmergencyAlert).where(EmergencyAlert.is_active == True).order_by(EmergencyAlert.created_at.desc())
+    async def list_active_emergencies(self, only_active: bool = False) -> List[EmergencyAlertOut]:
+        """Admin console query to view emergency alerts with user and property details."""
+        query = (
+            select(EmergencyAlert, User, Property)
+            .join(User, EmergencyAlert.user_id == User.id)
+            .outerjoin(Property, EmergencyAlert.property_id == Property.id)
+        )
+        if only_active:
+            query = query.where(EmergencyAlert.is_active == True)
+
+        query = query.order_by(EmergencyAlert.is_active.desc(), EmergencyAlert.created_at.desc())
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        rows = result.all()
+
+        items: List[EmergencyAlertOut] = []
+        for alert, user, prop in rows:
+            items.append(
+                EmergencyAlertOut(
+                    id=alert.id,
+                    user_id=alert.user_id,
+                    property_id=alert.property_id,
+                    alert_type=alert.alert_type,
+                    emergency_message=alert.emergency_message,
+                    latitude=alert.latitude,
+                    longitude=alert.longitude,
+                    is_active=alert.is_active,
+                    resolved_at=alert.resolved_at,
+                    created_at=alert.created_at,
+                    user_name=user.full_name if user else "Unknown User",
+                    user_phone=user.phone if user else "",
+                    property_title=prop.title if prop else None,
+                    resolution_notes=alert.resolution_notes,
+                )
+            )
+        return items
