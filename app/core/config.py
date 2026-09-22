@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     PAYMENT_PROVIDER: str = "mock"
     BKASH_APP_KEY: str = ""
     BKASH_APP_SECRET: str = ""
+    BKASH_USERNAME: str = ""
+    BKASH_PASSWORD: str = ""
+    BKASH_BASE_URL: str = "https://tokenized.sandbox.bka.sh/v1.2.0-beta"
+    BKASH_CALLBACK_URL: str = "https://bachnest.tanvirmern.com/api/v1/billing/bkash/callback"
+    FRONTEND_APP_URL: str = "https://bachnest.tanvirmern.com"
     SSLCOMMERZ_STORE_ID: str = ""
     SSLCOMMERZ_STORE_PASSWORD: str = ""
 

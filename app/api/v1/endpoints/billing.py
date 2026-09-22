@@ -3,6 +3,7 @@
 from typing import List, Optional
 import uuid
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,11 +36,13 @@ from app.schemas.property import PropertyOut
 from app.services.admin_service import AdminService
 from app.services.audit_service import AuditService
 from app.services.billing_service import BillingService
+from app.services.bkash_service import BkashService
 from app.services.complaint_service import ComplaintService
 from app.services.emergency_service import EmergencyService
 from app.services.notice_service import NoticeService
 from app.services.payment_service import PaymentService
 from app.services.review_service import ReviewService
+from app.schemas.billing import BkashInitiateResponse
 
 billing_router = APIRouter(prefix="/billing", tags=["Billing & Invoices"])
 payments_router = APIRouter(prefix="/payments", tags=["Payments"])
@@ -96,6 +99,53 @@ async def get_invoice_by_id(
         message="Invoice details retrieved",
         data=InvoiceOut.model_validate(invoice),
     )
+
+
+@billing_router.post(
+    "/invoices/{invoice_id}/bkash/initiate",
+    response_model=StandardResponse[BkashInitiateResponse],
+)
+async def initiate_bkash_payment(
+    invoice_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Initiate bKash Tokenized Checkout for an open invoice. Returns a bkashURL to redirect the tenant."""
+    bkash_service = BkashService(db)
+    result = await bkash_service.initiate(invoice_id, current_user)
+    return StandardResponse(
+        success=True,
+        message="bKash payment session created. Redirect user to bkash_url.",
+        data=result,
+    )
+
+
+@billing_router.get("/bkash/callback")
+async def bkash_payment_callback(
+    paymentID: str = Query(...),
+    status: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    bKash redirects here after user completes OTP/PIN flow.
+    Executes the payment and redirects the tenant to the frontend receipt page.
+    """
+    from app.core.config import settings as app_settings
+
+    bkash_service = BkashService(db)
+    try:
+        payment = await bkash_service.execute_callback(paymentID, status)
+        if payment.status.value == "COMPLETED":
+            redirect_url = (
+                f"{app_settings.FRONTEND_APP_URL}/dashboard?payment=success"
+                f"&paymentId={payment.id}"
+            )
+        else:
+            redirect_url = f"{app_settings.FRONTEND_APP_URL}/dashboard?payment=failed"
+    except Exception:
+        redirect_url = f"{app_settings.FRONTEND_APP_URL}/dashboard?payment=failed"
+
+    return RedirectResponse(url=redirect_url, status_code=302)
 
 
 # --- PAYMENTS ---
