@@ -112,7 +112,7 @@ class TenancyService:
 
         tenant_nid = None
         if tenancy.tenant and tenancy.tenant.kyc:
-            tenant_nid = tenancy.tenant.kyc.id_number
+            tenant_nid = getattr(tenancy.tenant.kyc, "document_number", None) or getattr(tenancy.tenant.kyc, "id_number", None)
 
         return DigitalAgreementOut(
             tenancy_id=tenancy.id,
