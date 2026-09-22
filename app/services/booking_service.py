@@ -15,11 +15,13 @@ from app.models.property import Property
 from app.models.room import Room, RoomSeat
 from app.models.user import User
 from app.schemas.booking import BookingAdvancePayRequest, BookingCreateRequest, BookingDecisionRequest
+from app.services.notification_service import NotificationService
 
 
 class BookingService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.notification_service = NotificationService(db)
 
     async def create_booking_request(self, tenant: User, req: BookingCreateRequest) -> Booking:
         """Submit a booking request with concurrency protection."""
@@ -82,6 +84,15 @@ class BookingService:
         )
         self.db.add(booking)
         await self.db.flush()
+
+        # Notify property owner of new booking/visit inquiry
+        await self.notification_service.create_notification(
+            recipient_id=prop.owner_id,
+            title="New Booking / Visit Request",
+            body=f"{tenant.full_name} submitted a {'visit request' if req.preferred_visit_date else 'booking request'} for {prop.title}.",
+            data={"type": "BOOKING_REQUEST", "booking_id": str(booking.id)},
+        )
+
         query = select(Booking).options(*self._eager_options()).where(Booking.id == booking.id)
         return (await self.db.execute(query)).scalar_one()
 
@@ -144,6 +155,26 @@ class BookingService:
             booking.visit_notes = new_entry
 
         await self.db.flush()
+
+        # Dispatch in-app notification to the counterparty
+        recipient_id = (
+            booking.tenant_id
+            if sender_role == "Landlord"
+            else (booking.property.owner_id if booking.property else None)
+        )
+        if recipient_id and recipient_id != user.id:
+            prop_title = booking.property.title if booking.property else "your property"
+            await self.notification_service.create_notification(
+                recipient_id=recipient_id,
+                title=f"New Message from {sender_role}",
+                body=f"{user.full_name}: {message.strip()}",
+                data={
+                    "type": "BOOKING_MESSAGE",
+                    "booking_id": str(booking.id),
+                    "property_title": prop_title,
+                },
+            )
+
         await self.db.refresh(booking)
         return await self.get_booking_by_id(booking_id, user)
 
@@ -218,9 +249,25 @@ class BookingService:
             )
             self.db.add(tenancy)
 
+            # Notify tenant of booking approval
+            await self.notification_service.create_notification(
+                recipient_id=booking.tenant_id,
+                title="Booking Request Approved!",
+                body=f"Your booking request for {prop.title} has been approved by the landlord.",
+                data={"type": "BOOKING_APPROVED", "booking_id": str(booking.id)},
+            )
+
         else:
             booking.booking_status = BookingStatus.REJECTED
             booking.cancellation_reason = req.reason or "Rejected by property owner"
+
+            # Notify tenant of booking rejection
+            await self.notification_service.create_notification(
+                recipient_id=booking.tenant_id,
+                title="Booking Request Declined",
+                body=f"Your booking request for {prop.title} was declined by the landlord.",
+                data={"type": "BOOKING_REJECTED", "booking_id": str(booking.id)},
+            )
 
         await self.db.flush()
         query = select(Booking).options(*self._eager_options()).where(Booking.id == booking.id)
@@ -243,6 +290,21 @@ class BookingService:
             booking.owner_remarks = remarks
 
         await self.db.flush()
+
+        # Notify tenant that landlord confirmed inspection visit
+        visit_date_str = str(booking.preferred_visit_date) if booking.preferred_visit_date else "the requested date"
+        remarks_suffix = f" Note: {remarks}" if remarks else ""
+        await self.notification_service.create_notification(
+            recipient_id=booking.tenant_id,
+            title="Property Visit Confirmed",
+            body=f"Landlord confirmed your visit for {visit_date_str}.{remarks_suffix}",
+            data={
+                "type": "VISIT_CONFIRMED",
+                "booking_id": str(booking.id),
+                "property_title": prop.title if prop else "Property",
+            },
+        )
+
         query = select(Booking).options(*self._eager_options()).where(Booking.id == booking.id)
         return (await self.db.execute(query)).scalar_one()
 

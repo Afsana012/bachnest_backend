@@ -18,6 +18,7 @@ from app.api.v1.endpoints.properties import owner_properties_router, properties_
 from app.api.v1.endpoints.parking import parking_router, property_parking_router
 from app.api.v1.endpoints.roommates import router as roommates_router
 from app.api.v1.endpoints.deposits import router as deposits_router
+from app.api.v1.endpoints.notifications import router as notifications_router
 from app.api.v1.endpoints.users import admin_kyc_router, kyc_router, users_router
 
 api_router = APIRouter()
@@ -44,4 +45,5 @@ api_router.include_router(complaints_router)
 api_router.include_router(notices_router)
 api_router.include_router(reviews_router)
 api_router.include_router(emergency_router)
+api_router.include_router(notifications_router)
 api_router.include_router(admin_router)
