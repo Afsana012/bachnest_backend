@@ -2,12 +2,13 @@
 
 from typing import List, Optional
 import uuid
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.constants import UserRole
-from app.core.exceptions import PermissionDeniedError, ResourceNotFoundError
+from app.core.constants import TenancyStatus, UserRole
+from app.core.exceptions import ConflictError, PermissionDeniedError, ResourceNotFoundError
+from app.models.booking import Tenancy
 from app.models.property import Property
 from app.models.room import Room, RoomSeat
 from app.models.user import User
@@ -80,6 +81,15 @@ class RoomService:
         """Delete room."""
         room = await self.get_room_by_id(room_id)
         await self._verify_property_ownership(room.property_id, user)
+
+        # Ensure no active tenancies exist for this room
+        active_tenancy_check = select(func.count(Tenancy.id)).where(
+            Tenancy.room_id == room_id,
+            Tenancy.status.in_([TenancyStatus.ACTIVE, TenancyStatus.NOTICE_SERVED]),
+        )
+        active_count = (await self.db.execute(active_tenancy_check)).scalar_one()
+        if active_count > 0:
+            raise ConflictError(message="Cannot delete a room with active or notice-served tenancies.")
 
         await self.db.delete(room)
         await self.db.flush()

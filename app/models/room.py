@@ -44,9 +44,9 @@ class Room(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     # Relationships
     property = relationship("Property", back_populates="rooms")
-    seats = relationship("RoomSeat", back_populates="room", cascade="all, delete-orphan")
-    bookings = relationship("Booking", back_populates="room")
-    tenancies = relationship("Tenancy", back_populates="room")
+    seats = relationship("RoomSeat", back_populates="room", cascade="all, delete-orphan", passive_deletes=True)
+    bookings = relationship("Booking", back_populates="room", cascade="all, delete-orphan", passive_deletes=True)
+    tenancies = relationship("Tenancy", back_populates="room", cascade="all, delete-orphan", passive_deletes=True)
 
 
 class RoomSeat(Base, UUIDPrimaryKeyMixin, TimestampMixin):

@@ -54,10 +54,10 @@ class Property(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     # Relationships
     owner = relationship("User", back_populates="properties")
-    rooms = relationship("Room", back_populates="property", cascade="all, delete-orphan")
-    media = relationship("PropertyMedia", back_populates="property", cascade="all, delete-orphan")
-    bookings = relationship("Booking", back_populates="property")
-    tenancies = relationship("Tenancy", back_populates="property")
-    complaints = relationship("Complaint", back_populates="property")
-    notices = relationship("Notice", back_populates="property", cascade="all, delete-orphan")
-    parking_spaces = relationship("ParkingSpace", back_populates="property", cascade="all, delete-orphan")
+    rooms = relationship("Room", back_populates="property", cascade="all, delete-orphan", passive_deletes=True)
+    media = relationship("PropertyMedia", back_populates="property", cascade="all, delete-orphan", passive_deletes=True)
+    bookings = relationship("Booking", back_populates="property", cascade="all, delete-orphan", passive_deletes=True)
+    tenancies = relationship("Tenancy", back_populates="property", cascade="all, delete-orphan", passive_deletes=True)
+    complaints = relationship("Complaint", back_populates="property", cascade="all, delete-orphan", passive_deletes=True)
+    notices = relationship("Notice", back_populates="property", cascade="all, delete-orphan", passive_deletes=True)
+    parking_spaces = relationship("ParkingSpace", back_populates="property", cascade="all, delete-orphan", passive_deletes=True)
