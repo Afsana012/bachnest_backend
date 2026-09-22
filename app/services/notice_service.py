@@ -5,18 +5,20 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import NoticePriority, TenancyStatus, UserRole
+from app.core.constants import BookingStatus, NoticePriority, TenancyStatus, UserRole
 from app.core.exceptions import PermissionDeniedError, ResourceNotFoundError
-from app.models.booking import Tenancy
+from app.models.booking import Booking, Tenancy
 from app.models.complaint import Notice, NoticeRead
 from app.models.property import Property
 from app.models.user import User
 from app.schemas.booking import NoticeCreateRequest, NoticeOut, NoticeUpdateRequest
+from app.services.notification_service import NotificationService
 
 
 class NoticeService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.notification_service = NotificationService(db)
 
     async def create_notice(self, property_id: uuid.UUID, owner: User, req: NoticeCreateRequest) -> Notice:
         """Owner publishes a digital notice to building tenants."""
@@ -38,6 +40,40 @@ class NoticeService:
         )
         self.db.add(notice)
         await self.db.flush()
+
+        # Notify all active tenants and approved booking holders of this building notice
+        tenancies_query = select(Tenancy.tenant_id).where(
+            Tenancy.property_id == property_id,
+            Tenancy.status.in_([TenancyStatus.ACTIVE, TenancyStatus.NOTICE_SERVED]),
+        )
+        tenancy_tenants = set((await self.db.execute(tenancies_query)).scalars().all())
+
+        bookings_query = select(Booking.tenant_id).where(
+            Booking.property_id == property_id,
+            Booking.booking_status.in_([
+                BookingStatus.APPROVED_BY_OWNER,
+                BookingStatus.DEPOSIT_PAID,
+                BookingStatus.ACTIVE,
+            ]),
+        )
+        booking_tenants = set((await self.db.execute(bookings_query)).scalars().all())
+
+        all_recipients = tenancy_tenants.union(booking_tenants)
+        for recipient_id in all_recipients:
+            if recipient_id != owner.id:
+                await self.notification_service.create_notification(
+                    recipient_id=recipient_id,
+                    title=f"Building Notice: {req.title}",
+                    body=req.content,
+                    data={
+                        "type": "BUILDING_NOTICE",
+                        "notice_id": str(notice.id),
+                        "property_id": str(property_id),
+                        "property_title": prop.title,
+                        "priority": req.priority.value,
+                    },
+                )
+
         await self.db.refresh(notice)
         return notice
 
@@ -52,14 +88,24 @@ class NoticeService:
         return list(result.scalars().all())
 
     async def list_tenant_notices(self, tenant: User) -> List[NoticeOut]:
-        """List notices for all active properties the tenant resides in."""
-        tenancies_query = select(Tenancy).where(
+        """List notices for all properties the tenant resides in or is approved for."""
+        tenancies_query = select(Tenancy.property_id).where(
             Tenancy.tenant_id == tenant.id,
-            Tenancy.status.in_([TenancyStatus.ACTIVE, TenancyStatus.NOTICE_SERVED])
+            Tenancy.status.in_([TenancyStatus.ACTIVE, TenancyStatus.NOTICE_SERVED]),
         )
-        tenancies = (await self.db.execute(tenancies_query)).scalars().all()
-        property_ids = [t.property_id for t in tenancies]
+        tenancy_property_ids = set((await self.db.execute(tenancies_query)).scalars().all())
 
+        bookings_query = select(Booking.property_id).where(
+            Booking.tenant_id == tenant.id,
+            Booking.booking_status.in_([
+                BookingStatus.APPROVED_BY_OWNER,
+                BookingStatus.DEPOSIT_PAID,
+                BookingStatus.ACTIVE,
+            ]),
+        )
+        booking_property_ids = set((await self.db.execute(bookings_query)).scalars().all())
+
+        property_ids = list(tenancy_property_ids.union(booking_property_ids))
         if not property_ids:
             return []
 
